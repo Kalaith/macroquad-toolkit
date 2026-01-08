@@ -5,8 +5,11 @@ A collection of common utilities for Macroquad game development, extracted from 
 ## Features
 
 - **Input utilities**: Mouse hovering, clicking, rectangle collision detection
-- **UI rendering**: Buttons (with press/release variants), panels, progress bars
+- **UI rendering**: Buttons, colored buttons, windows/modals, panels, progress bars
 - **Asset management**: Texture loading and caching
+- **Audio management**: Sound effect and music handling with volume control
+- **Persistence**: Easy JSON save/load system
+- **State management**: Game state trait and transition system
 - **Camera2D**: Pan and zoom for 2D games
 - **Event bus**: Generic event system for decoupled game logic
 - **Color palettes**: Consistent dark theme colors
@@ -98,8 +101,18 @@ if button_on_press(x, y, w, h, "Press", &style) {
 // Panel with title
 panel(x, y, w, h, Some("Title"));
 
+// Window (Modal-like) with close button
+if window(x, y, w, h, Some("Title"), true) {
+    // Window close button clicked
+}
+
 // Progress bar
 progress_bar(x, y, w, h, current, max, dark::POSITIVE);
+
+// Colored Button
+if colored_button(x, y, w, h, "Action", RED) {
+   // ...
+}
 ```
 
 ### Assets (`assets` module)
@@ -184,6 +197,60 @@ let sprite = Sprite::new()
     .colored(RED);
 
 sprite.draw();
+```
+
+### Persistence (`persistence` module)
+
+```rust
+use macroquad_toolkit::persistence::*; // save_json, load_json, get_app_data_path
+
+#[derive(Serialize, Deserialize)]
+struct SaveData {
+    score: u32,
+    level: u32,
+}
+
+// Save to standard app data location
+if let Some(path) = get_app_data_path("my_game", "save.json") {
+    let data = SaveData { score: 100, level: 1 };
+    save_json(&path, &data).ok();
+}
+```
+
+### Audio (`audio` module)
+
+```rust
+use macroquad_toolkit::audio::{SoundManager, SoundId};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Sfx {
+    Jump,
+    Shoot,
+}
+
+let mut audio = SoundManager::new();
+audio.load_sound(Sfx::Jump, "assets/jump.wav").await.ok();
+
+audio.play_sfx(Sfx::Jump, 1.0); // Plays with 1.0 * global_sfx_volume
+```
+
+### States (`states` module)
+
+```rust
+use macroquad_toolkit::states::{GameState, Transition};
+use std::any::Any;
+
+struct MyGame;
+
+struct MenuState;
+impl GameState<MyGame> for MenuState {
+    fn update(&mut self, _ctx: &mut MyGame) -> Option<Box<dyn Any>> {
+        None
+    }
+    fn draw(&self, _ctx: &MyGame) {
+        // Draw menu
+    }
+}
 ```
 
 ## Button Click Semantics

@@ -12,6 +12,7 @@ pub struct ButtonStyle {
     pub pressed: Color,
     pub border: Color,
     pub text_color: Color,
+    pub disabled: Color,
 }
 
 impl ButtonStyle {
@@ -23,6 +24,7 @@ impl ButtonStyle {
             pressed: Color::new(0.25, 0.35, 0.5, 1.0),
             border: dark::ACCENT,
             text_color: dark::TEXT,
+            disabled: Color::new(0.1, 0.1, 0.1, 1.0),
         }
     }
 }
@@ -116,6 +118,57 @@ pub fn button_on_release(x: f32, y: f32, w: f32, h: f32, text: &str, style: &But
     );
 
     clicked
+}
+
+/// Draw a button with explicit colors (simplified wrapper)
+pub fn colored_button(x: f32, y: f32, w: f32, h: f32, text: &str, color: Color) -> bool {
+    let style = ButtonStyle {
+        normal: color,
+        hovered: Color::new(color.r * 1.2, color.g * 1.2, color.b * 1.2, color.a),
+        pressed: Color::new(color.r * 0.8, color.g * 0.8, color.b * 0.8, color.a),
+        border: dark::TEXT_DIM,
+        text_color: dark::TEXT_BRIGHT,
+        ..ButtonStyle::default()
+    };
+    button_on_release(x, y, w, h, text, &style)
+}
+
+/// Draw a simple window/modal frame
+pub fn window(x: f32, y: f32, w: f32, h: f32, title: Option<&str>, close_button: bool) -> bool {
+    // Shadow
+    draw_rectangle(x + 4.0, y + 4.0, w, h, Color::new(0.0, 0.0, 0.0, 0.5));
+    
+    // Main body
+    draw_rectangle(x, y, w, h, dark::PANEL);
+    draw_rectangle_lines(x, y, w, h, 2.0, dark::ACCENT);
+    
+    // Header
+    if let Some(t) = title {
+        draw_rectangle(x, y, w, 30.0, dark::PANEL_HEADER);
+        draw_text(t, x + 10.0, y + 22.0, 20.0, dark::TEXT);
+    }
+    
+    // Close button
+    if close_button {
+        let btn_size = 24.0;
+        let btn_x = x + w - btn_size - 3.0;
+        let btn_y = y + 3.0;
+        
+        let style = ButtonStyle {
+            normal: dark::NEGATIVE,
+            hovered: Color::new(0.9, 0.4, 0.4, 1.0),
+            pressed: Color::new(0.7, 0.2, 0.2, 1.0),
+            border: dark::TEXT,
+            text_color: dark::TEXT_BRIGHT,
+            ..ButtonStyle::default()
+        };
+        
+        if button_on_release(btn_x, btn_y, btn_size, btn_size, "X", &style) {
+            return true;
+        }
+    }
+    
+    false
 }
 
 /// Draw a panel with optional title
