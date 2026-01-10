@@ -100,3 +100,25 @@ pub async fn load_texture_filtered(path: &str, filter: FilterMode) -> Result<Tex
 pub async fn load_texture_nearest(path: &str) -> Result<Texture2D, String> {
     load_texture_filtered(path, FilterMode::Nearest).await
 }
+
+/// Configuration for loading textures from data files (JSON)
+#[derive(Debug, serde::Deserialize)]
+pub struct TextureConfig {
+    pub key: String,
+    pub path: String,
+}
+
+impl TextureConfig {
+    /// Load texture configuration from a JSON string
+    pub fn from_json(json: &str) -> Result<Vec<Self>, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+    
+    /// Load texture configuration from a JSON file path
+    pub async fn load_from_file(path: &str) -> Result<Vec<Self>, String> {
+        match macroquad::prelude::load_string(path).await {
+            Ok(json) => Self::from_json(&json).map_err(|e| e.to_string()),
+            Err(e) => Err(format!("Failed to load config file: {}", e)),
+        }
+    }
+}

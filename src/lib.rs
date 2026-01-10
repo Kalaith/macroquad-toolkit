@@ -15,6 +15,8 @@ pub mod persistence;
 pub mod audio;
 pub mod states;
 pub mod rng;
+#[cfg(feature = "db")]
+pub mod db;
 
 /// Convenient re-exports for common usage
 pub mod prelude {

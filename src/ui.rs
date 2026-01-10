@@ -310,3 +310,54 @@ pub fn display_name(type_key: &str) -> String {
         .join(" ")
 }
 
+
+/// Helper for grid layouts
+pub struct GridLayout {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub padding: f32,
+    pub cols: usize,
+    pub card_height: f32,
+}
+
+impl GridLayout {
+    pub fn new(x: f32, y: f32, width: f32, padding: f32, cols: usize, card_height: f32) -> Self {
+        Self { x, y, width, padding, cols, card_height }
+    }
+
+    /// Multiply card height by number of rows to get total content height
+    pub fn content_height(&self, item_count: usize) -> f32 {
+        let rows = (item_count + self.cols - 1) / self.cols; // ceil division
+        (rows as f32) * (self.card_height + self.padding)
+    }
+
+    /// Get position and size for an item at index
+    pub fn get_item_rect(&self, index: usize, scroll_y: f32) -> (f32, f32, f32, f32) {
+        let col = (index % self.cols) as f32;
+        let row = (index / self.cols) as f32;
+        
+        // Distribute width
+        let total_padding = (self.cols - 1) as f32 * self.padding;
+        let card_width = (self.width - total_padding) / self.cols as f32;
+
+        let item_x = self.x + col * (card_width + self.padding);
+        let item_y = self.y + row * (self.card_height + self.padding) - scroll_y;
+
+        (item_x, item_y, card_width, self.card_height)
+    }
+}
+
+/// Helper to handle scrolling logic
+/// Returns the new scroll value clamped to 0..max_scroll
+pub fn handle_scroll(current_scroll: f32, total_height: f32, view_height: f32, scroll_speed: f32) -> f32 {
+    let (_, wheel_y) = mouse_wheel();
+    let mut scroll = current_scroll;
+    
+    if wheel_y != 0.0 {
+        scroll -= wheel_y * scroll_speed;
+    }
+    
+    let max_scroll = (total_height - view_height).max(0.0);
+    scroll.clamp(0.0, max_scroll)
+}

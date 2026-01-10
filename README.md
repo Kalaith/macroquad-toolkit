@@ -129,6 +129,15 @@ assets.load_texture("player", "assets/player.png").await.ok();
 if let Some(tex) = assets.get_texture("player") {
     draw_texture(tex, x, y, WHITE);
 }
+
+// Data-driven loading (from JSON config)
+// JSON: [{"key": "hero", "path": "assets/hero.png"}]
+use macroquad_toolkit::assets::TextureConfig;
+if let Ok(configs) = TextureConfig::load_from_file("assets/textures.json").await {
+    for config in configs {
+        assets.load_texture(&config.key, &config.path).await.ok();
+    }
+}
 ```
 
 ### Camera (`camera` module)
@@ -214,6 +223,15 @@ full_screen_overlay(0.7); // 70% opacity
 // String helpers
 let title = capitalize("warrior");           // "Warrior"
 let name = display_name("health_potion");    // "Health Potion"
+
+// Grid Layout Helper
+let grid = GridLayout::new(x, y, width, padding, cols, card_height);
+let (bx, by, bw, bh) = grid.get_item_rect(index, scroll_y);
+
+// Scroll Helper
+// Returns new scroll value clamped to content bounds
+let new_scroll = handle_scroll(current_scroll, content_height, view_height, 30.0);
+
 ```
 
 ### RNG (`rng` module)
@@ -304,6 +322,35 @@ The toolkit provides two button variants to handle different click behaviors:
 
 - **`button_on_press()`**: Fires when mouse button is **pressed down** over the button. Use this for instant feedback scenarios.
 
+## Database (`db` module)
+
+Utilities for SQLite using `sqlx`. Enabled via the `db` feature.
+
+**Cargo.toml**:
+```toml
+macroquad-toolkit = { version = "...", features = ["db"] }
+```
+
+**Usage**:
+```rust
+use macroquad_toolkit::db::Database;
+
+// Initialize (auto-creates DB file if missing)
+let db = Database::new("sqlite://game.db").await?;
+
+// Run raw migrations/queries
+db.run_raw_migrations(&[
+    "CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY)",
+    "INSERT INTO players (id) VALUES ('p1')",
+]).await?;
+
+// Access the underlying sqlx::SqlitePool
+let row: (i64,) = sqlx::query_as("SELECT count(*) FROM players")
+    .fetch_one(&db.pool)
+    .await?;
+```
+
 ## License
+
 
 This toolkit is extracted from game projects and shared for reuse across multiple games.
