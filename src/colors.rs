@@ -19,3 +19,14 @@ pub mod dark {
 
     pub const HOVERED: Color = Color::new(0.3, 0.4, 0.55, 1.0);
 }
+
+/// Rarity color palette - for items, equipment, loot in RPG-style games
+pub mod rarity {
+    use macroquad::prelude::Color;
+
+    pub const COMMON: Color = Color::new(0.6, 0.6, 0.6, 1.0);
+    pub const UNCOMMON: Color = Color::new(0.3, 0.7, 0.3, 1.0);
+    pub const RARE: Color = Color::new(0.3, 0.5, 0.9, 1.0);
+    pub const EPIC: Color = Color::new(0.6, 0.3, 0.9, 1.0);
+    pub const LEGENDARY: Color = Color::new(0.9, 0.6, 0.2, 1.0);
+}

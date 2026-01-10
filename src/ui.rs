@@ -244,3 +244,69 @@ pub fn progress_bar_labeled(
         dark::TEXT,
     );
 }
+
+/// Draw a section panel with title header - common for UI sections
+pub fn section_panel(x: f32, y: f32, w: f32, h: f32, title: &str) {
+    // Background
+    draw_rectangle(x, y, w, h, Color::new(0.1, 0.1, 0.15, 0.85));
+    draw_rectangle_lines(x, y, w, h, 1.0, Color::new(0.4, 0.4, 0.6, 0.5));
+    
+    // Title
+    draw_text(title, x + 10.0, y + 22.0, 18.0, dark::ACCENT);
+}
+
+/// Draw a clickable card component. Returns true if clicked.
+pub fn card(x: f32, y: f32, w: f32, h: f32, selected: bool) -> bool {
+    let hovered = is_hovered(x, y, w, h);
+    let clicked = hovered && is_mouse_button_released(MouseButton::Left);
+    
+    let bg_color = if selected {
+        Color::new(0.2, 0.25, 0.35, 0.9)
+    } else if hovered {
+        Color::new(0.18, 0.18, 0.25, 0.9)
+    } else {
+        Color::new(0.12, 0.12, 0.18, 0.9)
+    };
+    
+    let border_color = if selected {
+        dark::ACCENT
+    } else {
+        Color::new(0.5, 0.5, 0.5, 0.4)
+    };
+    
+    draw_rectangle(x, y, w, h, bg_color);
+    draw_rectangle_lines(x, y, w, h, 1.0, border_color);
+    
+    clicked
+}
+
+/// Draw a full-screen semi-transparent overlay (for modals/screens)
+pub fn full_screen_overlay(alpha: f32) {
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.05, 0.05, 0.1, alpha),
+    );
+}
+
+/// Capitalize the first character of a string
+pub fn capitalize(s: &str) -> String {
+    let mut chars = s.chars().collect::<Vec<_>>();
+    if let Some(c) = chars.get_mut(0) {
+        *c = c.to_ascii_uppercase();
+    }
+    chars.into_iter().collect()
+}
+
+/// Format a type_key (snake_case) into a display name (Title Case)
+/// e.g., "health_potion" -> "Health Potion"
+pub fn display_name(type_key: &str) -> String {
+    type_key
+        .split('_')
+        .map(|word| capitalize(word))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+

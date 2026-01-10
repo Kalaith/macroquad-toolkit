@@ -184,6 +184,49 @@ Available colors:
 - `ACCENT`, `POSITIVE`, `WARNING`, `NEGATIVE`
 - `HOVERED`
 
+Rarity colors (for RPG items):
+```rust
+use macroquad_toolkit::colors::rarity;
+
+draw_rectangle(x, y, w, h, rarity::COMMON);     // Gray
+draw_rectangle(x, y, w, h, rarity::UNCOMMON);   // Green
+draw_rectangle(x, y, w, h, rarity::RARE);       // Blue
+draw_rectangle(x, y, w, h, rarity::EPIC);       // Purple
+draw_rectangle(x, y, w, h, rarity::LEGENDARY);  // Orange
+```
+
+### Additional UI Components
+
+```rust
+use macroquad_toolkit::ui::*;
+
+// Section panel with title header
+section_panel(x, y, w, h, "Section Title");
+
+// Clickable card (returns true if clicked)
+if card(x, y, w, h, is_selected) {
+    // Card was clicked
+}
+
+// Full-screen overlay for modals
+full_screen_overlay(0.7); // 70% opacity
+
+// String helpers
+let title = capitalize("warrior");           // "Warrior"
+let name = display_name("health_potion");    // "Health Potion"
+```
+
+### RNG (`rng` module)
+
+```rust
+use macroquad_toolkit::rng::*;
+
+// Seeded random number generator
+let mut rng = GameRng::new(12345);
+let value = rng.gen_range(1..100);
+let choice = rng.choose(&["a", "b", "c"]);
+```
+
 ### Sprite (`sprite` module)
 
 ```rust
