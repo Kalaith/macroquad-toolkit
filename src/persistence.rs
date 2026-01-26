@@ -2,7 +2,7 @@
 //!
 //! Provides multiple storage backends:
 //! - Native: JSON files on the filesystem
-//! - WASM: quad-storage (localStorage wrapper)
+//! - WASM: web-sys localStorage
 //!
 //! # Example (Native)
 //! ```no_run
@@ -170,13 +170,9 @@ pub fn save_to_slot_with_version<T: Serialize>(
 
     #[cfg(target_arch = "wasm32")]
     {
-        use quad_storage::STORAGE;
-        if let Ok(mut storage) = STORAGE.lock() {
-            storage.set(&key, &serialized);
-            Ok(())
-        } else {
-            Err("Failed to lock quad-storage".to_string())
-        }
+        let _ = game_name; // unused in WASM
+        crate::wasm_storage::storage_set(&key, &serialized);
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -206,13 +202,9 @@ pub fn load_from_slot<T: DeserializeOwned>(
     let content = {
         #[cfg(target_arch = "wasm32")]
         {
-            use quad_storage::STORAGE;
-            if let Ok(storage) = STORAGE.lock() {
-                storage.get(&key)
-                    .ok_or_else(|| format!("No save found for slot: {}", slot_name))?
-            } else {
-                return Err("Failed to lock quad-storage".to_string());
-            }
+            let _ = game_name; // unused in WASM
+            crate::wasm_storage::storage_get(&key)
+                .ok_or_else(|| format!("No save found for slot: {}", slot_name))?
         }
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -236,12 +228,8 @@ pub fn slot_exists(game_name: &str, slot_name: &str) -> bool {
 
     #[cfg(target_arch = "wasm32")]
     {
-        use quad_storage::STORAGE;
-        if let Ok(storage) = STORAGE.lock() {
-            storage.get(&key).is_some()
-        } else {
-            false
-        }
+        let _ = game_name; // unused in WASM
+        crate::wasm_storage::storage_exists(&key)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -260,13 +248,9 @@ pub fn delete_slot(game_name: &str, slot_name: &str) -> Result<(), String> {
 
     #[cfg(target_arch = "wasm32")]
     {
-        use quad_storage::STORAGE;
-        if let Ok(mut storage) = STORAGE.lock() {
-            storage.remove(&key);
-            Ok(())
-        } else {
-            Err("Failed to lock quad-storage".to_string())
-        }
+        let _ = game_name; // unused in WASM
+        crate::wasm_storage::storage_remove(&key);
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]

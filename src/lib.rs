@@ -62,6 +62,10 @@ pub mod persistence;
 #[cfg(feature = "db")]
 pub mod db;
 
+// WASM storage support
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_storage;
+
 /// Convenient re-exports for common 2D game development usage
 pub mod prelude {
     // Input and UI
