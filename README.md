@@ -14,6 +14,7 @@ A collection of common utilities for Macroquad game development, extracted from 
 - **Event bus**: Generic event system for decoupled game logic
 - **Color palettes**: Consistent dark theme colors
 - **Sprite system**: Builder pattern for texture rendering with transformations
+- **Bounded text layout**: Helpers for measuring, wrapping, fitting, truncating, and drawing text inside UI boxes
 
 ## Usage
 
@@ -113,7 +114,35 @@ progress_bar(x, y, w, h, current, max, dark::POSITIVE);
 if colored_button(x, y, w, h, "Action", RED) {
    // ...
 }
+
+// Wrap and fit text inside a box
+let lines = wrap_text("Long paragraph text", 280.0, 20.0);
+let layout = fit_text_to_box("Long paragraph text", 280.0, 120.0, 20.0, 6.0, 12.0);
+draw_text_block("Long paragraph text", x, y, 280.0, 120.0, 20.0, 6.0, dark::TEXT);
+draw_text_centered_in_box("Title", x, y, 280.0, 32.0, 20.0, dark::TEXT);
 ```
+
+### Text Layout Rule
+
+All UI text should be treated as **box-bounded**.
+
+Rule:
+- every text draw in a panel, button, modal, card, header, label, tooltip, or status area must have a width and height budget
+- never assume a string will fit because it looked short in one build
+- if text is too large for the box, the UI must wrap, shrink, or truncate before it can overlap another element
+
+Preferred toolkit usage:
+- `draw_text_centered_in_box()` for button labels, titles, and centered captions
+- `draw_text_block()` for paragraph or panel body text
+- `wrap_text()` and `fit_text_to_box()` when layout must be calculated before drawing
+- `truncate_text_to_width()` for single-line labels that must stay on one line
+
+This rule exists to keep UIs visually stable across:
+- longer content
+- localization
+- dynamic values
+- different resolutions
+- future content additions
 
 ### Assets (`assets` module)
 

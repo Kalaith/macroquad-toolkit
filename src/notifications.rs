@@ -23,22 +23,17 @@
 use serde::{Deserialize, Serialize};
 
 /// Type of notification for styling purposes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum NotificationType {
     /// Positive event (achievement, level up, victory)
     Success,
     /// Neutral information (hint, status update)
+    #[default]
     Info,
     /// Warning (low resources, approaching danger)
     Warning,
     /// Negative event (damage taken, item lost, defeat)
     Danger,
-}
-
-impl Default for NotificationType {
-    fn default() -> Self {
-        Self::Info
-    }
 }
 
 /// A single notification message

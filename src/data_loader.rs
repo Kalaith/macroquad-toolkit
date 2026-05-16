@@ -102,6 +102,19 @@ pub async fn load_json_file<T: DeserializeOwned>(path: &str) -> Result<T, String
     serde_json::from_str(&content).map_err(|e| format!("JSON parse error: {}", e))
 }
 
+/// Load a data file from "assets/data/{name}.json"
+///
+/// This provides a convenient shorthand for loading game data files.
+///
+/// # Example
+/// ```rust,ignore
+/// let items: Vec<Item> = load_data("items").await?;
+/// ```
+pub async fn load_data<T: DeserializeOwned>(name: &str) -> Result<T, String> {
+    let path = format!("assets/data/{}.json", name);
+    load_json_file(&path).await
+}
+
 /// Synchronous JSON file loading (native only)
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_json_file_sync<T: DeserializeOwned>(path: &str) -> Result<T, String> {

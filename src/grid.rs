@@ -341,20 +341,15 @@ where
 }
 
 /// Fog of war state for a tile
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FogState {
     /// Tile has never been seen
+    #[default]
     Hidden,
     /// Tile was seen before but is not currently visible
     Revealed,
     /// Tile is currently visible
     Visible,
-}
-
-impl Default for FogState {
-    fn default() -> Self {
-        Self::Hidden
-    }
 }
 
 #[cfg(test)]

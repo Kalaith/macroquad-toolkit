@@ -4,6 +4,13 @@ use macroquad::prelude::*;
 use crate::input::*;
 use crate::colors::dark;
 
+#[derive(Debug, Clone)]
+pub struct TextLayoutResult {
+    pub lines: Vec<String>,
+    pub font_size: f32,
+    pub truncated: bool,
+}
+
 /// Style configuration for buttons
 #[derive(Debug, Clone)]
 pub struct ButtonStyle {
@@ -68,14 +75,13 @@ pub fn button_on_press(x: f32, y: f32, w: f32, h: f32, text: &str, style: &Butto
     // Text offset for press effect
     let y_offset = if is_pressed { 2.0 } else { 0.0 };
 
-    // Center text
-    let text_size = 20.0;
-    let text_width = measure_text(text, None, text_size as u16, 1.0).width;
-    draw_text(
+    draw_text_centered_in_box(
         text,
-        x + (w - text_width) / 2.0,
-        y + h / 2.0 + 6.0 + y_offset,
-        text_size,
+        x + 8.0,
+        y + y_offset,
+        w - 16.0,
+        h,
+        20.0,
         style.text_color,
     );
 
@@ -106,14 +112,13 @@ pub fn button_on_release(x: f32, y: f32, w: f32, h: f32, text: &str, style: &But
     // Text offset for press effect
     let y_offset = if is_pressed { 2.0 } else { 0.0 };
 
-    // Center text
-    let text_size = 20.0;
-    let text_width = measure_text(text, None, text_size as u16, 1.0).width;
-    draw_text(
+    draw_text_centered_in_box(
         text,
-        x + (w - text_width) / 2.0,
-        y + h / 2.0 + 6.0 + y_offset,
-        text_size,
+        x + 8.0,
+        y + y_offset,
+        w - 16.0,
+        h,
+        20.0,
         style.text_color,
     );
 
@@ -145,7 +150,7 @@ pub fn window(x: f32, y: f32, w: f32, h: f32, title: Option<&str>, close_button:
     // Header
     if let Some(t) = title {
         draw_rectangle(x, y, w, 30.0, dark::PANEL_HEADER);
-        draw_text(t, x + 10.0, y + 22.0, 20.0, dark::TEXT);
+        draw_text_centered_in_box(t, x + 10.0, y + 2.0, w - 20.0, 26.0, 20.0, dark::TEXT);
     }
     
     // Close button
@@ -179,7 +184,7 @@ pub fn panel(x: f32, y: f32, w: f32, h: f32, title: Option<&str>) {
     // Header (if title provided)
     if let Some(title) = title {
         draw_rectangle(x, y, w, 30.0, dark::PANEL_HEADER);
-        draw_text(title, x + 10.0, y + 22.0, 20.0, dark::TEXT);
+        draw_text_centered_in_box(title, x + 10.0, y + 2.0, w - 20.0, 26.0, 20.0, dark::TEXT);
     }
 
     // Border
@@ -220,6 +225,7 @@ pub fn progress_bar(x: f32, y: f32, w: f32, h: f32, value: f32, max: f32, color:
     draw_rectangle_lines(x, y, w, h, 1.0, dark::TEXT_DIM);
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Draw a progress bar with centered label
 pub fn progress_bar_labeled(
     x: f32,
@@ -233,16 +239,7 @@ pub fn progress_bar_labeled(
 ) {
     progress_bar(x, y, w, h, value, max, color);
 
-    // Draw label centered
-    let text_size = 16.0;
-    let text_width = measure_text(label, None, text_size as u16, 1.0).width;
-    draw_text(
-        label,
-        x + (w - text_width) / 2.0,
-        y + h / 2.0 + 5.0,
-        text_size,
-        dark::TEXT,
-    );
+    draw_text_centered_in_box(label, x + 6.0, y, w - 12.0, h, 16.0, dark::TEXT);
 }
 
 /// Draw a section panel with title header - common for UI sections
@@ -252,7 +249,7 @@ pub fn section_panel(x: f32, y: f32, w: f32, h: f32, title: &str) {
     draw_rectangle_lines(x, y, w, h, 1.0, Color::new(0.4, 0.4, 0.6, 0.5));
     
     // Title
-    draw_text(title, x + 10.0, y + 22.0, 18.0, dark::ACCENT);
+    draw_text_centered_in_box(title, x + 10.0, y + 2.0, w - 20.0, 24.0, 18.0, dark::ACCENT);
 }
 
 /// Draw a clickable card component. Returns true if clicked.
@@ -305,9 +302,173 @@ pub fn capitalize(s: &str) -> String {
 pub fn display_name(type_key: &str) -> String {
     type_key
         .split('_')
-        .map(|word| capitalize(word))
+        .map(capitalize)
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+pub fn truncate_text_to_width(text: &str, max_width: f32, font_size: f32) -> String {
+    if measure_text(text, None, font_size as u16, 1.0).width <= max_width {
+        return text.to_owned();
+    }
+
+    let ellipsis = "...";
+    let mut result = String::new();
+    for ch in text.chars() {
+        let candidate = format!("{result}{ch}{ellipsis}");
+        if measure_text(&candidate, None, font_size as u16, 1.0).width > max_width {
+            break;
+        }
+        result.push(ch);
+    }
+
+    if result.is_empty() {
+        ellipsis.to_owned()
+    } else {
+        format!("{result}{ellipsis}")
+    }
+}
+
+pub fn wrap_text(text: &str, max_width: f32, font_size: f32) -> Vec<String> {
+    let mut wrapped = Vec::new();
+
+    for paragraph in text.split('\n') {
+        if paragraph.trim().is_empty() {
+            wrapped.push(String::new());
+            continue;
+        }
+
+        let mut current = String::new();
+        for word in paragraph.split_whitespace() {
+            let candidate = if current.is_empty() {
+                word.to_owned()
+            } else {
+                format!("{current} {word}")
+            };
+
+            if measure_text(&candidate, None, font_size as u16, 1.0).width <= max_width {
+                current = candidate;
+                continue;
+            }
+
+            if !current.is_empty() {
+                wrapped.push(std::mem::take(&mut current));
+            }
+
+            if measure_text(word, None, font_size as u16, 1.0).width <= max_width {
+                current = word.to_owned();
+                continue;
+            }
+
+            let mut chunk = String::new();
+            for ch in word.chars() {
+                let candidate = format!("{chunk}{ch}");
+                if measure_text(&candidate, None, font_size as u16, 1.0).width > max_width
+                    && !chunk.is_empty()
+                {
+                    wrapped.push(chunk);
+                    chunk = ch.to_string();
+                } else {
+                    chunk.push(ch);
+                }
+            }
+            current = chunk;
+        }
+
+        if !current.is_empty() {
+            wrapped.push(current);
+        }
+    }
+
+    if wrapped.is_empty() {
+        vec![String::new()]
+    } else {
+        wrapped
+    }
+}
+
+pub fn fit_text_to_box(
+    text: &str,
+    max_width: f32,
+    max_height: f32,
+    starting_font_size: f32,
+    line_gap: f32,
+    min_font_size: f32,
+) -> TextLayoutResult {
+    let mut font_size = starting_font_size;
+
+    while font_size >= min_font_size {
+        let lines = wrap_text(text, max_width, font_size);
+        let total_height = lines.len() as f32 * font_size
+            + (lines.len().saturating_sub(1) as f32 * line_gap);
+        if total_height <= max_height {
+            return TextLayoutResult {
+                lines,
+                font_size,
+                truncated: false,
+            };
+        }
+        font_size -= 1.0;
+    }
+
+    let font_size = min_font_size.max(1.0);
+    let max_lines = ((max_height + line_gap) / (font_size + line_gap)).floor().max(1.0) as usize;
+    let mut lines = wrap_text(text, max_width, font_size);
+    let truncated = lines.len() > max_lines;
+    lines.truncate(max_lines);
+    if let Some(last_line) = lines.last_mut() {
+        *last_line = truncate_text_to_width(last_line, max_width, font_size);
+    }
+
+    TextLayoutResult {
+        lines,
+        font_size,
+        truncated,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn draw_text_block(
+    text: &str,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    starting_font_size: f32,
+    line_gap: f32,
+    color: Color,
+) -> TextLayoutResult {
+    let layout = fit_text_to_box(text, w, h, starting_font_size, line_gap, 12.0);
+    let mut line_y = y + layout.font_size;
+    for line in &layout.lines {
+        draw_text(line, x, line_y, layout.font_size, color);
+        line_y += layout.font_size + line_gap;
+    }
+    layout
+}
+
+pub fn draw_text_centered_in_box(
+    text: &str,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    starting_font_size: f32,
+    color: Color,
+) -> TextLayoutResult {
+    let layout = fit_text_to_box(text, w, h, starting_font_size, 4.0, 10.0);
+    let total_height = layout.lines.len() as f32 * layout.font_size
+        + (layout.lines.len().saturating_sub(1) as f32 * 4.0);
+    let mut line_y = y + ((h - total_height) * 0.5) + layout.font_size;
+
+    for line in &layout.lines {
+        let line_width = measure_text(line, None, layout.font_size as u16, 1.0).width;
+        let line_x = x + (w - line_width) * 0.5;
+        draw_text(line, line_x, line_y, layout.font_size, color);
+        line_y += layout.font_size + 4.0;
+    }
+
+    layout
 }
 
 
@@ -328,7 +489,7 @@ impl GridLayout {
 
     /// Multiply card height by number of rows to get total content height
     pub fn content_height(&self, item_count: usize) -> f32 {
-        let rows = (item_count + self.cols - 1) / self.cols; // ceil division
+        let rows = item_count.div_ceil(self.cols);
         (rows as f32) * (self.card_height + self.padding)
     }
 
