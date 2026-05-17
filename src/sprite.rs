@@ -114,13 +114,7 @@ impl Sprite {
         let ox = w * self.origin.x;
         let oy = h * self.origin.y;
 
-        draw_rectangle(
-            self.position.x - ox,
-            self.position.y - oy,
-            w,
-            h,
-            color,
-        );
+        draw_rectangle(self.position.x - ox, self.position.y - oy, w, h, color);
     }
 }
 

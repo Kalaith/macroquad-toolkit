@@ -38,25 +38,25 @@
 //! - [`db`] - Database support (optional, requires `db` feature)
 
 // Core 2D modules (existing)
-pub mod input;
+pub mod assets;
+pub mod audio;
+pub mod camera;
 pub mod colors;
 pub mod events;
-pub mod assets;
-pub mod sprite;
-pub mod camera;
-pub mod ui;
-pub mod audio;
-pub mod states;
+pub mod input;
 pub mod rng;
+pub mod sprite;
+pub mod states;
+pub mod ui;
 
 // New modules extracted from dungeon_manager
-pub mod render3d;
-pub mod grid;
-pub mod pathfinding;
-pub mod entities;
-pub mod notifications;
 pub mod data_loader;
+pub mod entities;
+pub mod grid;
+pub mod notifications;
+pub mod pathfinding;
 pub mod persistence;
+pub mod render3d;
 
 // Optional database support
 #[cfg(feature = "db")]
@@ -69,30 +69,30 @@ pub mod wasm_storage;
 /// Convenient re-exports for common 2D game development usage
 pub mod prelude {
     // Input and UI
+    pub use crate::colors::dark;
     pub use crate::input::*;
     pub use crate::ui::*;
-    pub use crate::colors::dark;
 
     // Assets and rendering
     pub use crate::assets::AssetManager;
-    pub use crate::sprite::Sprite;
     pub use crate::camera::Camera2D;
+    pub use crate::sprite::Sprite;
 
     // Persistence
     pub use crate::persistence::*;
 
     // Game systems
-    pub use crate::states::*;
-    pub use crate::rng::*;
     pub use crate::notifications::{NotificationManager, NotificationType};
+    pub use crate::rng::*;
+    pub use crate::states::*;
 }
 
 /// Re-exports for 3D game development
 pub mod prelude_3d {
-    pub use crate::render3d::*;
+    pub use crate::entities::*;
     pub use crate::grid::*;
     pub use crate::pathfinding::*;
-    pub use crate::entities::*;
+    pub use crate::render3d::*;
 }
 
 /// Re-exports for data-driven game development

@@ -5,6 +5,33 @@
 
 use macroquad::rand;
 
+/// Small deterministic RNG for reproducible generation.
+#[derive(Debug, Clone, Copy)]
+pub struct SeededRng {
+    state: u64,
+}
+
+impl SeededRng {
+    pub fn new(seed: u64) -> Self {
+        let init = seed ^ 0x9E3779B97F4A7C15;
+        Self { state: init }
+    }
+
+    pub fn next_u64(&mut self) -> u64 {
+        let mut x = self.state;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.state = x;
+        x.wrapping_mul(0x2545F4914F6CDD1D)
+    }
+
+    pub fn next_f32(&mut self) -> f32 {
+        let value = self.next_u64() >> 40;
+        (value as f32) / ((1u64 << 24) as f32)
+    }
+}
+
 /// Generate a random float between 0.0 and 1.0 (exclusive)
 pub fn rand() -> f32 {
     rand::gen_range(0.0, 1.0)
@@ -51,5 +78,28 @@ pub fn choose_mut<T>(slice: &mut [T]) -> Option<&mut T> {
     } else {
         let len = slice.len();
         Some(&mut slice[rand::gen_range(0, len)])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SeededRng;
+
+    #[test]
+    fn seeded_rng_is_repeatable() {
+        let mut a = SeededRng::new(42);
+        let mut b = SeededRng::new(42);
+
+        assert_eq!(a.next_u64(), b.next_u64());
+        assert_eq!(a.next_u64(), b.next_u64());
+    }
+
+    #[test]
+    fn seeded_rng_float_is_unit_interval() {
+        let mut rng = SeededRng::new(7);
+        for _ in 0..16 {
+            let value = rng.next_f32();
+            assert!((0.0..=1.0).contains(&value));
+        }
     }
 }

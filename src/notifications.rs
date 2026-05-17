@@ -20,7 +20,10 @@
 //! // }
 //! ```
 
+use macroquad::prelude::*;
 use serde::{Deserialize, Serialize};
+
+use crate::ui::truncate_text_to_width;
 
 /// Type of notification for styling purposes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -34,6 +37,63 @@ pub enum NotificationType {
     Warning,
     /// Negative event (damage taken, item lost, defeat)
     Danger,
+}
+
+impl NotificationType {
+    pub fn color(self) -> Color {
+        match self {
+            NotificationType::Success => Color::new(0.25, 0.75, 0.35, 1.0),
+            NotificationType::Info => Color::new(0.25, 0.5, 0.9, 1.0),
+            NotificationType::Warning => Color::new(0.95, 0.65, 0.18, 1.0),
+            NotificationType::Danger => Color::new(0.9, 0.25, 0.25, 1.0),
+        }
+    }
+}
+
+/// Toast stack anchor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationAnchor {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// Rendering configuration for notification toasts.
+#[derive(Debug, Clone)]
+pub struct NotificationRenderConfig {
+    pub anchor: NotificationAnchor,
+    pub margin: f32,
+    pub width: f32,
+    pub row_height: f32,
+    pub spacing: f32,
+    pub padding: f32,
+    pub font_size: f32,
+    pub background: Color,
+    pub text_color: Color,
+    pub border_alpha: f32,
+}
+
+impl Default for NotificationRenderConfig {
+    fn default() -> Self {
+        Self {
+            anchor: NotificationAnchor::TopRight,
+            margin: 16.0,
+            width: 360.0,
+            row_height: 46.0,
+            spacing: 8.0,
+            padding: 10.0,
+            font_size: 16.0,
+            background: Color::new(0.04, 0.04, 0.06, 0.92),
+            text_color: WHITE,
+            border_alpha: 0.95,
+        }
+    }
+}
+
+fn with_alpha(mut color: Color, alpha: f32) -> Color {
+    color.a *= alpha;
+    color
 }
 
 /// A single notification message
@@ -89,13 +149,21 @@ pub const DEFAULT_DURATION: f32 = 4.0;
 pub const MAX_NOTIFICATIONS: usize = 5;
 
 /// Manages the notification queue
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationManager {
     notifications: Vec<Notification>,
-    #[serde(skip, default)]
+    #[serde(skip, default = "default_max_notifications")]
     max_notifications: usize,
-    #[serde(skip, default)]
+    #[serde(skip, default = "default_notification_duration")]
     default_duration: f32,
+}
+
+fn default_max_notifications() -> usize {
+    MAX_NOTIFICATIONS
+}
+
+fn default_notification_duration() -> f32 {
+    DEFAULT_DURATION
 }
 
 impl NotificationManager {
@@ -206,6 +274,74 @@ impl NotificationManager {
     pub fn pop_newest(&mut self) -> Option<Notification> {
         self.notifications.pop()
     }
+
+    /// Draw notifications using the default toast style.
+    pub fn draw(&self) {
+        draw_notifications(
+            self.get_notifications(),
+            &NotificationRenderConfig::default(),
+        );
+    }
+
+    /// Draw notifications using a custom toast style.
+    pub fn draw_with_config(&self, config: &NotificationRenderConfig) {
+        draw_notifications(self.get_notifications(), config);
+    }
+}
+
+impl Default for NotificationManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Draw a stack of notification toasts.
+pub fn draw_notifications(notifications: &[Notification], config: &NotificationRenderConfig) {
+    let total_height = notifications.len() as f32 * config.row_height
+        + notifications.len().saturating_sub(1) as f32 * config.spacing;
+
+    let x = match config.anchor {
+        NotificationAnchor::TopLeft | NotificationAnchor::BottomLeft => config.margin,
+        NotificationAnchor::TopRight | NotificationAnchor::BottomRight => {
+            screen_width() - config.margin - config.width
+        }
+    };
+
+    let start_y = match config.anchor {
+        NotificationAnchor::TopLeft | NotificationAnchor::TopRight => config.margin,
+        NotificationAnchor::BottomLeft | NotificationAnchor::BottomRight => {
+            screen_height() - config.margin - total_height
+        }
+    };
+
+    for (index, notification) in notifications.iter().enumerate() {
+        let y = start_y + index as f32 * (config.row_height + config.spacing);
+        draw_notification(notification, x, y, config);
+    }
+}
+
+/// Draw one notification toast.
+pub fn draw_notification(
+    notification: &Notification,
+    x: f32,
+    y: f32,
+    config: &NotificationRenderConfig,
+) {
+    let opacity = notification.opacity();
+    let accent = with_alpha(notification.notification_type.color(), opacity);
+    let background = with_alpha(config.background, opacity);
+    let text_color = with_alpha(config.text_color, opacity);
+    let border = with_alpha(accent, config.border_alpha);
+
+    draw_rectangle(x, y, config.width, config.row_height, background);
+    draw_rectangle(x, y, 4.0, config.row_height, accent);
+    draw_rectangle_lines(x, y, config.width, config.row_height, 1.0, border);
+
+    let text_x = x + config.padding + 8.0;
+    let max_text_width = config.width - config.padding * 2.0 - 8.0;
+    let message = truncate_text_to_width(&notification.message, max_text_width, config.font_size);
+    let text_y = y + (config.row_height + config.font_size) * 0.5 - 3.0;
+    draw_text(&message, text_x, text_y, config.font_size, text_color);
 }
 
 #[cfg(test)]

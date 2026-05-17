@@ -25,9 +25,7 @@ pub struct EventBus<T> {
 impl<T> EventBus<T> {
     /// Create a new empty event bus
     pub fn new() -> Self {
-        Self {
-            events: Vec::new(),
-        }
+        Self { events: Vec::new() }
     }
 
     /// Push an event to the bus

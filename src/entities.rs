@@ -365,8 +365,18 @@ mod tests {
     fn test_entity_manager_basic() {
         let mut manager: EntityManager<TestEntity> = EntityManager::new();
 
-        let id1 = manager.spawn(TestEntity { x: 0, y: 0, hp: 100.0, max_hp: 100.0 });
-        let id2 = manager.spawn(TestEntity { x: 5, y: 5, hp: 50.0, max_hp: 100.0 });
+        let id1 = manager.spawn(TestEntity {
+            x: 0,
+            y: 0,
+            hp: 100.0,
+            max_hp: 100.0,
+        });
+        let id2 = manager.spawn(TestEntity {
+            x: 5,
+            y: 5,
+            hp: 50.0,
+            max_hp: 100.0,
+        });
 
         assert_eq!(manager.count(), 2);
         assert!(manager.contains(id1));
@@ -380,9 +390,24 @@ mod tests {
     fn test_position_query() {
         let mut manager: EntityManager<TestEntity> = EntityManager::new();
 
-        manager.spawn(TestEntity { x: 5, y: 5, hp: 100.0, max_hp: 100.0 });
-        manager.spawn(TestEntity { x: 5, y: 5, hp: 50.0, max_hp: 100.0 });
-        manager.spawn(TestEntity { x: 10, y: 10, hp: 75.0, max_hp: 100.0 });
+        manager.spawn(TestEntity {
+            x: 5,
+            y: 5,
+            hp: 100.0,
+            max_hp: 100.0,
+        });
+        manager.spawn(TestEntity {
+            x: 5,
+            y: 5,
+            hp: 50.0,
+            max_hp: 100.0,
+        });
+        manager.spawn(TestEntity {
+            x: 10,
+            y: 10,
+            hp: 75.0,
+            max_hp: 100.0,
+        });
 
         let at_5_5 = manager.at_position(5, 5);
         assert_eq!(at_5_5.len(), 2);
@@ -395,9 +420,24 @@ mod tests {
     fn test_remove_dead() {
         let mut manager: EntityManager<TestEntity> = EntityManager::new();
 
-        manager.spawn(TestEntity { x: 0, y: 0, hp: 100.0, max_hp: 100.0 });
-        manager.spawn(TestEntity { x: 1, y: 1, hp: 0.0, max_hp: 100.0 }); // Dead
-        manager.spawn(TestEntity { x: 2, y: 2, hp: 50.0, max_hp: 100.0 });
+        manager.spawn(TestEntity {
+            x: 0,
+            y: 0,
+            hp: 100.0,
+            max_hp: 100.0,
+        });
+        manager.spawn(TestEntity {
+            x: 1,
+            y: 1,
+            hp: 0.0,
+            max_hp: 100.0,
+        }); // Dead
+        manager.spawn(TestEntity {
+            x: 2,
+            y: 2,
+            hp: 50.0,
+            max_hp: 100.0,
+        });
 
         assert_eq!(manager.count(), 3);
 

@@ -57,15 +57,35 @@ pub fn draw_billboard(pos: Vec3, size: Vec2, texture: &Texture2D, camera_pos: Ve
 
     let mesh = Mesh {
         vertices: vec![
-            Vertex { position: v1, uv: vec2(0.0, 0.0), color: WHITE.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
-            Vertex { position: v2, uv: vec2(1.0, 0.0), color: WHITE.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
-            Vertex { position: v3, uv: vec2(1.0, 1.0), color: WHITE.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
-            Vertex { position: v4, uv: vec2(0.0, 1.0), color: WHITE.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
+            Vertex {
+                position: v1,
+                uv: vec2(0.0, 0.0),
+                color: WHITE.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
+            Vertex {
+                position: v2,
+                uv: vec2(1.0, 0.0),
+                color: WHITE.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
+            Vertex {
+                position: v3,
+                uv: vec2(1.0, 1.0),
+                color: WHITE.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
+            Vertex {
+                position: v4,
+                uv: vec2(0.0, 1.0),
+                color: WHITE.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
         ],
         // Double sided: draw CW and CCW
         indices: vec![
             0, 1, 2, 0, 2, 3, // Front
-            0, 2, 1, 0, 3, 2  // Back
+            0, 2, 1, 0, 3, 2, // Back
         ],
         texture: Some(texture.clone()),
     };
@@ -76,7 +96,13 @@ pub fn draw_billboard(pos: Vec3, size: Vec2, texture: &Texture2D, camera_pos: Ve
 /// Draw a tinted billboard sprite in 3D space
 ///
 /// Same as `draw_billboard` but with color tinting support.
-pub fn draw_billboard_tinted(pos: Vec3, size: Vec2, texture: &Texture2D, camera_pos: Vec3, color: Color) {
+pub fn draw_billboard_tinted(
+    pos: Vec3,
+    size: Vec2,
+    texture: &Texture2D,
+    camera_pos: Vec3,
+    color: Color,
+) {
     let to_cam = camera_pos - pos;
     let dist_sq = to_cam.x * to_cam.x + to_cam.z * to_cam.z;
 
@@ -99,15 +125,32 @@ pub fn draw_billboard_tinted(pos: Vec3, size: Vec2, texture: &Texture2D, camera_
 
     let mesh = Mesh {
         vertices: vec![
-            Vertex { position: v1, uv: vec2(0.0, 0.0), color: color.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
-            Vertex { position: v2, uv: vec2(1.0, 0.0), color: color.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
-            Vertex { position: v3, uv: vec2(1.0, 1.0), color: color.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
-            Vertex { position: v4, uv: vec2(0.0, 1.0), color: color.into(), normal: vec4(fwd.x, fwd.y, fwd.z, 0.0) },
+            Vertex {
+                position: v1,
+                uv: vec2(0.0, 0.0),
+                color: color.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
+            Vertex {
+                position: v2,
+                uv: vec2(1.0, 0.0),
+                color: color.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
+            Vertex {
+                position: v3,
+                uv: vec2(1.0, 1.0),
+                color: color.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
+            Vertex {
+                position: v4,
+                uv: vec2(0.0, 1.0),
+                color: color.into(),
+                normal: vec4(fwd.x, fwd.y, fwd.z, 0.0),
+            },
         ],
-        indices: vec![
-            0, 1, 2, 0, 2, 3,
-            0, 2, 1, 0, 3, 2
-        ],
+        indices: vec![0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2],
         texture: Some(texture.clone()),
     };
 

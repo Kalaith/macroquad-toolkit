@@ -361,7 +361,8 @@ pub fn find_path(
 
             // Calculate movement cost
             let move_cost = if allow_diagonals {
-                let is_diagonal = (current.x - neighbor.x).abs() + (current.y - neighbor.y).abs() == 2;
+                let is_diagonal =
+                    (current.x - neighbor.x).abs() + (current.y - neighbor.y).abs() == 2;
                 if is_diagonal {
                     1.414 * grid.get_cost(neighbor)
                 } else {
@@ -384,6 +385,104 @@ pub fn find_path(
                 open_set.push(AStarNode {
                     pos: neighbor,
                     f_score,
+                    g_score: tentative_g_score,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+/// Find a path using closure-based walkability and movement costs.
+///
+/// This avoids materializing a `PathfindingGrid` when a game already has its
+/// own grid or tile storage.
+#[allow(clippy::too_many_arguments)]
+pub fn find_path_with<FWalkable, FCost>(
+    start: Pos,
+    goal: Pos,
+    width: usize,
+    height: usize,
+    is_walkable: FWalkable,
+    movement_cost: FCost,
+    heuristic: Heuristic,
+    allow_diagonals: bool,
+) -> Option<Path>
+where
+    FWalkable: Fn(Pos) -> bool,
+    FCost: Fn(Pos) -> f32,
+{
+    let is_valid = |pos: Pos| {
+        pos.x >= 0 && pos.y >= 0 && (pos.x as usize) < width && (pos.y as usize) < height
+    };
+
+    if !is_valid(start) || !is_valid(goal) || !is_walkable(start) || !is_walkable(goal) {
+        return None;
+    }
+
+    if start == goal {
+        return Some(Path::new(vec![start], 0.0));
+    }
+
+    let mut open_set = BinaryHeap::new();
+    let mut came_from: HashMap<Pos, Pos> = HashMap::new();
+    let mut g_scores: HashMap<Pos, f32> = HashMap::new();
+    let mut closed_set: HashSet<Pos> = HashSet::new();
+
+    g_scores.insert(start, 0.0);
+    open_set.push(AStarNode {
+        pos: start,
+        f_score: heuristic.estimate(start, goal),
+        g_score: 0.0,
+    });
+
+    while let Some(current_node) = open_set.pop() {
+        let current = current_node.pos;
+
+        if current == goal {
+            return Some(reconstruct_path(&came_from, current, current_node.g_score));
+        }
+
+        if closed_set.contains(&current) {
+            continue;
+        }
+
+        closed_set.insert(current);
+
+        let neighbors: Vec<Pos> = if allow_diagonals {
+            current.neighbors_8way().to_vec()
+        } else {
+            current.neighbors_4way().to_vec()
+        };
+
+        for neighbor in neighbors {
+            if !is_valid(neighbor) || !is_walkable(neighbor) || closed_set.contains(&neighbor) {
+                continue;
+            }
+
+            let base_cost = movement_cost(neighbor);
+            if !base_cost.is_finite() {
+                continue;
+            }
+
+            let is_diagonal = (current.x - neighbor.x).abs() + (current.y - neighbor.y).abs() == 2;
+            let move_cost = if allow_diagonals && is_diagonal {
+                1.414 * base_cost
+            } else {
+                base_cost
+            };
+
+            let tentative_g_score = current_node.g_score + move_cost;
+            let neighbor_g_score = g_scores.get(&neighbor).copied().unwrap_or(f32::INFINITY);
+
+            if tentative_g_score < neighbor_g_score {
+                came_from.insert(neighbor, current);
+                g_scores.insert(neighbor, tentative_g_score);
+
+                open_set.push(AStarNode {
+                    pos: neighbor,
+                    f_score: tentative_g_score + heuristic.estimate(neighbor, goal),
                     g_score: tentative_g_score,
                 });
             }
@@ -585,5 +684,30 @@ mod tests {
         assert!(path_4way.is_some());
 
         assert!(path_diagonal.unwrap().len() < path_4way.unwrap().len());
+    }
+
+    #[test]
+    fn test_closure_based_pathfinding() {
+        let blocked = [
+            Pos::new(2, 0),
+            Pos::new(2, 1),
+            Pos::new(2, 2),
+            Pos::new(2, 3),
+        ];
+        let path = find_path_with(
+            Pos::new(0, 2),
+            Pos::new(4, 2),
+            5,
+            5,
+            |pos| !blocked.contains(&pos),
+            |_| 1.0,
+            Heuristic::Manhattan,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(path.start(), Some(Pos::new(0, 2)));
+        assert_eq!(path.goal(), Some(Pos::new(4, 2)));
+        assert!(path.waypoints.contains(&Pos::new(2, 4)));
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! Handles loading and playing sound effects with volume control.
 
-use macroquad::audio::{Sound, PlaySoundParams, play_sound, load_sound};
+use macroquad::audio::{load_sound, play_sound, PlaySoundParams, Sound};
 use std::collections::HashMap;
 
 /// Trait for easier sound indexing (usually an Enum)
@@ -43,31 +43,45 @@ impl<T: SoundId> SoundManager<T> {
     ///
     /// The volume is multiplied by the global sfx_volume.
     pub fn play_sfx(&self, id: T, volume_multiplier: f32) {
-        if !self.visible { return; }
-        
+        if !self.visible {
+            return;
+        }
+
         if let Some(sound) = self.sounds.get(&id) {
             play_sound(
                 sound, // Sound is Copy in macroquad 0.4
                 PlaySoundParams {
                     looped: false,
                     volume: self.sfx_volume * volume_multiplier,
-                }
+                },
             );
         }
     }
 
     /// Play a sound directly (ignoring volume settings, use carefully)
     pub fn play_raw(&self, id: T, params: PlaySoundParams) {
-        if !self.visible { return; }
+        if !self.visible {
+            return;
+        }
 
         if let Some(sound) = self.sounds.get(&id) {
             play_sound(sound, params);
         }
     }
-    
+
     /// Check if a sound is loaded
     pub fn has_sound(&self, id: T) -> bool {
         self.sounds.contains_key(&id)
+    }
+
+    /// Number of loaded sounds.
+    pub fn len(&self) -> usize {
+        self.sounds.len()
+    }
+
+    /// Check whether no sounds are loaded.
+    pub fn is_empty(&self) -> bool {
+        self.sounds.is_empty()
     }
 }
 

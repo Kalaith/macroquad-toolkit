@@ -52,7 +52,10 @@ impl IsometricCamera {
     pub fn new(center_x: f32, center_z: f32) -> Self {
         // Find index of default distance (20.0)
         let default_dist = 20.0;
-        let index = Self::ZOOM_LEVELS.iter().position(|&d| d == default_dist).unwrap_or(4);
+        let index = Self::ZOOM_LEVELS
+            .iter()
+            .position(|&d| d == default_dist)
+            .unwrap_or(4);
 
         Self {
             target: (center_x, 0.0, center_z),
@@ -136,9 +139,11 @@ impl IsometricCamera {
     /// Get the camera's world position
     pub fn get_position(&self) -> Vec3 {
         vec3(
-            self.target.0 + (self.distance * 0.5) * (self.angle + std::f32::consts::FRAC_PI_2).cos(),
+            self.target.0
+                + (self.distance * 0.5) * (self.angle + std::f32::consts::FRAC_PI_2).cos(),
             self.distance,
-            self.target.2 + (self.distance * 0.5) * (self.angle + std::f32::consts::FRAC_PI_2).sin(),
+            self.target.2
+                + (self.distance * 0.5) * (self.angle + std::f32::consts::FRAC_PI_2).sin(),
         )
     }
 

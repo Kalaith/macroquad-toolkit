@@ -34,6 +34,7 @@
 
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 /// Load JSON data from an embedded string (compile-time include)
 ///
@@ -46,6 +47,24 @@ use std::collections::HashMap;
 /// ```
 pub fn load_embedded_json<T: DeserializeOwned>(json_str: &str) -> Result<T, String> {
     serde_json::from_str(json_str).map_err(|e| format!("JSON parse error: {}", e))
+}
+
+/// Load JSON data from an embedded string with a human-readable label in errors.
+pub fn load_embedded_json_labeled<T: DeserializeOwned>(
+    label: &str,
+    json_str: &str,
+) -> Result<T, String> {
+    serde_json::from_str(json_str).map_err(|e| format!("JSON parse error in '{}': {}", label, e))
+}
+
+/// Load several embedded JSON strings that all deserialize to the same type.
+pub fn load_many_embedded_json<T: DeserializeOwned>(
+    inputs: &[(&str, &str)],
+) -> Result<Vec<T>, String> {
+    inputs
+        .iter()
+        .map(|(label, json)| load_embedded_json_labeled(label, json))
+        .collect()
 }
 
 /// Load JSON data from an embedded string into a HashMap by ID field
@@ -120,6 +139,49 @@ pub async fn load_data<T: DeserializeOwned>(name: &str) -> Result<T, String> {
 pub fn load_json_file_sync<T: DeserializeOwned>(path: &str) -> Result<T, String> {
     let content = std::fs::read_to_string(path).map_err(|e| format!("File read error: {}", e))?;
     serde_json::from_str(&content).map_err(|e| format!("JSON parse error: {}", e))
+}
+
+/// Build a path relative to a crate manifest directory.
+pub fn manifest_relative_path(manifest_dir: &str, relative_path: &str) -> PathBuf {
+    Path::new(manifest_dir).join(relative_path)
+}
+
+/// Resolve the first existing path from candidates.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn first_existing_path<'a>(candidates: impl IntoIterator<Item = &'a str>) -> Option<PathBuf> {
+    candidates
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|path| path.exists())
+}
+
+/// Load JSON from the first existing native path, or from embedded JSON if no path exists.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load_json_with_fallback_sync<T: DeserializeOwned>(
+    label: &str,
+    path_candidates: &[PathBuf],
+    embedded_json: &str,
+) -> Result<T, String> {
+    for path in path_candidates {
+        if path.exists() {
+            let content = std::fs::read_to_string(path)
+                .map_err(|e| format!("File read error in '{}': {}", path.display(), e))?;
+            return serde_json::from_str(&content)
+                .map_err(|e| format!("JSON parse error in '{}': {}", path.display(), e));
+        }
+    }
+
+    load_embedded_json_labeled(label, embedded_json)
+}
+
+/// WASM fallback: parse the embedded JSON, since native filesystem paths are unavailable.
+#[cfg(target_arch = "wasm32")]
+pub fn load_json_with_fallback_sync<T: DeserializeOwned>(
+    label: &str,
+    _path_candidates: &[PathBuf],
+    embedded_json: &str,
+) -> Result<T, String> {
+    load_embedded_json_labeled(label, embedded_json)
 }
 
 /// Helper macro for defining data types with automatic JSON loading
