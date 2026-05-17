@@ -255,23 +255,27 @@ impl TextureConfig {
     }
 
     /// Return a copy with its path resolved through common native fallbacks.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn resolved(mut self, prefixes_to_strip: &[&str]) -> Self {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            if std::path::Path::new(&self.path).exists() {
-                return self;
-            }
+        if std::path::Path::new(&self.path).exists() {
+            return self;
+        }
 
-            for prefix in prefixes_to_strip {
-                if let Some(stripped) = self.path.strip_prefix(prefix) {
-                    if std::path::Path::new(stripped).exists() {
-                        self.path = stripped.to_string();
-                        return self;
-                    }
+        for prefix in prefixes_to_strip {
+            if let Some(stripped) = self.path.strip_prefix(prefix) {
+                if std::path::Path::new(stripped).exists() {
+                    self.path = stripped.to_string();
+                    return self;
                 }
             }
         }
 
+        self
+    }
+
+    /// WASM assets are loaded from their manifest paths directly.
+    #[cfg(target_arch = "wasm32")]
+    pub fn resolved(self, _prefixes_to_strip: &[&str]) -> Self {
         self
     }
 }

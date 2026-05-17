@@ -56,6 +56,7 @@ fn sanitize_key(key: &str) -> String {
         .collect()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn key_file_name(key: &str) -> String {
     let sanitized = sanitize_key(key);
     if sanitized.ends_with(".json") {
@@ -180,6 +181,8 @@ pub fn get_configured_save_path(
             }
         }
     }
+    #[cfg(target_arch = "wasm32")]
+    let _ = test_env_var;
 
     get_app_data_path(game_name, file_name)
 }
@@ -215,6 +218,7 @@ pub fn get_nested_data_path(
 
     #[cfg(target_arch = "wasm32")]
     {
+        let _ = test_env_var;
         let mut path = PathBuf::new();
         for segment in segments {
             path.push(segment);
