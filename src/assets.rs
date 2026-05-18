@@ -2,6 +2,8 @@
 
 use macroquad::prelude::*;
 use std::collections::HashMap;
+use std::io::{Cursor, Read};
+use zip::ZipArchive;
 
 /// Manages texture assets with caching
 ///
@@ -21,6 +23,7 @@ use std::collections::HashMap;
 pub struct AssetManager {
     textures: HashMap<String, Texture2D>,
     fonts: HashMap<String, Font>,
+    asset_packs: Vec<AssetPack>,
     placeholder_texture: Option<Texture2D>,
     default_filter: FilterMode,
 }
@@ -31,6 +34,7 @@ impl AssetManager {
         Self {
             textures: HashMap::new(),
             fonts: HashMap::new(),
+            asset_packs: Vec::new(),
             placeholder_texture: None,
             default_filter: FilterMode::Nearest,
         }
@@ -57,6 +61,11 @@ impl AssetManager {
         path: &str,
         filter: FilterMode,
     ) -> Result<(), String> {
+        if let Some(texture) = self.load_texture_from_loaded_packs(path, filter) {
+            self.textures.insert(name.to_string(), texture);
+            return Ok(());
+        }
+
         match load_texture(path).await {
             Ok(texture) => {
                 texture.set_filter(filter);
@@ -114,6 +123,37 @@ impl AssetManager {
         Ok(self.load_texture_configs(&textures).await)
     }
 
+    /// Load a ZIP asset pack. Later `load_texture` calls check loaded packs before loose files.
+    ///
+    /// Paths inside the ZIP should match the normal asset paths used by the game, for example
+    /// `assets/tiles/tile_01.png`.
+    pub async fn load_asset_pack(&mut self, path: &str) -> Result<usize, String> {
+        let pack = AssetPack::load(path).await?;
+        let file_count = pack.len();
+        self.asset_packs.push(pack);
+        Ok(file_count)
+    }
+
+    /// Add an already-loaded asset pack.
+    pub fn add_asset_pack(&mut self, pack: AssetPack) {
+        self.asset_packs.push(pack);
+    }
+
+    /// Number of loaded asset packs.
+    pub fn asset_pack_len(&self) -> usize {
+        self.asset_packs.len()
+    }
+
+    fn load_texture_from_loaded_packs(&self, path: &str, filter: FilterMode) -> Option<Texture2D> {
+        for pack in &self.asset_packs {
+            if let Ok(texture) = pack.texture(path, filter) {
+                return Some(texture);
+            }
+        }
+
+        None
+    }
+
     /// Set a named texture as the placeholder returned by `get_texture_or_placeholder`.
     pub fn set_placeholder_texture(&mut self, name: &str) -> bool {
         if let Some(texture) = self.textures.get(name) {
@@ -138,7 +178,7 @@ impl AssetManager {
     pub fn get_texture_or_placeholder(&self, name: &str) -> Option<&Texture2D> {
         self.textures
             .get(name)
-            .or_else(|| self.placeholder_texture.as_ref())
+            .or(self.placeholder_texture.as_ref())
     }
 
     /// Check if a texture with the given name exists
@@ -187,6 +227,115 @@ impl Default for AssetManager {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// A ZIP-backed asset pack loaded into memory.
+///
+/// This is useful for Web builds where one archive request is cheaper than hundreds or thousands
+/// of tiny asset requests. Entries are addressed by their normalized forward-slash paths.
+pub struct AssetPack {
+    files: HashMap<String, Vec<u8>>,
+}
+
+impl AssetPack {
+    /// Load a ZIP asset pack from a Macroquad asset path.
+    pub async fn load(path: &str) -> Result<Self, String> {
+        let bytes = macroquad::file::load_file(path)
+            .await
+            .map_err(|e| format!("Failed to load asset pack '{}': {}", path, e))?;
+        Self::from_zip_bytes(bytes)
+    }
+
+    /// Build an asset pack from ZIP bytes.
+    pub fn from_zip_bytes(bytes: Vec<u8>) -> Result<Self, String> {
+        let reader = Cursor::new(bytes);
+        let mut archive =
+            ZipArchive::new(reader).map_err(|e| format!("Failed to read asset pack: {}", e))?;
+        let mut files = HashMap::new();
+
+        for i in 0..archive.len() {
+            let mut file = archive
+                .by_index(i)
+                .map_err(|e| format!("Failed to read asset pack entry {}: {}", i, e))?;
+            if file.is_dir() {
+                continue;
+            }
+
+            let name = normalize_asset_pack_path(file.name());
+            if name.is_empty() {
+                continue;
+            }
+
+            let capacity = usize::try_from(file.size()).unwrap_or(0);
+            let mut contents = Vec::with_capacity(capacity);
+            file.read_to_end(&mut contents)
+                .map_err(|e| format!("Failed to read asset pack entry '{}': {}", name, e))?;
+            files.insert(name, contents);
+        }
+
+        Ok(Self { files })
+    }
+
+    /// Get raw bytes for an entry path.
+    pub fn bytes(&self, path: &str) -> Option<&[u8]> {
+        self.files
+            .get(&normalize_asset_pack_path(path))
+            .map(Vec::as_slice)
+    }
+
+    /// Get a UTF-8 text entry.
+    pub fn text(&self, path: &str) -> Result<&str, String> {
+        let bytes = self
+            .bytes(path)
+            .ok_or_else(|| format!("Asset pack entry not found: {}", path))?;
+        std::str::from_utf8(bytes)
+            .map_err(|e| format!("Asset pack entry '{}' is not UTF-8: {}", path, e))
+    }
+
+    /// Create a texture from an entry.
+    pub fn texture(&self, path: &str, filter: FilterMode) -> Result<Texture2D, String> {
+        self.texture_with_format(path, filter, None)
+    }
+
+    /// Create a texture from an entry with an explicit image format.
+    pub fn texture_with_format(
+        &self,
+        path: &str,
+        filter: FilterMode,
+        format: Option<ImageFormat>,
+    ) -> Result<Texture2D, String> {
+        let bytes = self
+            .bytes(path)
+            .ok_or_else(|| format!("Asset pack entry not found: {}", path))?;
+        let image = Image::from_file_with_format(bytes, format)
+            .map_err(|e| format!("Failed to decode asset pack texture '{}': {}", path, e))?;
+        let texture = Texture2D::from_image(&image);
+        texture.set_filter(filter);
+        Ok(texture)
+    }
+
+    /// Check if the pack contains an entry.
+    pub fn contains(&self, path: &str) -> bool {
+        self.files.contains_key(&normalize_asset_pack_path(path))
+    }
+
+    /// Number of file entries in the pack.
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
+
+    /// Check if the pack has no file entries.
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
+}
+
+fn normalize_asset_pack_path(path: &str) -> String {
+    let mut normalized = path.replace('\\', "/");
+    while let Some(stripped) = normalized.strip_prefix("./") {
+        normalized = stripped.to_string();
+    }
+    normalized.trim_start_matches('/').to_string()
 }
 
 /// Load a texture with a specific filter mode
@@ -283,6 +432,9 @@ impl TextureConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Cursor, Write};
+    use zip::write::FileOptions;
+    use zip::{CompressionMethod, ZipWriter};
 
     #[test]
     fn test_texture_config_from_array_json() {
@@ -302,5 +454,22 @@ mod tests {
         assert_eq!(textures.len(), 1);
         assert_eq!(textures[0].key, "bg");
         assert!(matches!(textures[0].filter, Some(TextureFilter::Linear)));
+    }
+
+    #[test]
+    fn test_asset_pack_loads_zip_entries_by_normalized_path() {
+        let cursor = Cursor::new(Vec::new());
+        let mut writer = ZipWriter::new(cursor);
+        let options = FileOptions::default().compression_method(CompressionMethod::Stored);
+        writer
+            .start_file("assets/tiles/example.txt", options)
+            .unwrap();
+        writer.write_all(b"packed").unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+
+        let pack = AssetPack::from_zip_bytes(bytes).unwrap();
+
+        assert_eq!(pack.text("./assets/tiles/example.txt").unwrap(), "packed");
+        assert!(pack.contains(r"\assets\tiles\example.txt"));
     }
 }

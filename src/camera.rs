@@ -37,6 +37,7 @@ pub struct Camera2DConfig {
     pub pan_speed: f32,
     pub zoom_in_factor: f32,
     pub zoom_out_factor: f32,
+    pub mouse_wheel_zoom_to_cursor: bool,
     pub drag_button: Option<MouseButton>,
     pub bounds: Option<CameraBounds>,
     pub keyboard_pan_enabled: bool,
@@ -53,6 +54,7 @@ impl Default for Camera2DConfig {
             pan_speed: 500.0,
             zoom_in_factor: 1.1,
             zoom_out_factor: 0.9,
+            mouse_wheel_zoom_to_cursor: true,
             drag_button: Some(MouseButton::Left),
             bounds: None,
             keyboard_pan_enabled: true,
@@ -142,6 +144,26 @@ impl Camera2D {
         let center = vec2(screen_width() / 2.0, screen_height() / 2.0);
         let local = point - self.target;
         (local * self.zoom) + center
+    }
+
+    /// Build a macroquad camera matching this toolkit camera.
+    ///
+    /// This keeps positive Y pointing down, which matches macroquad's default
+    /// screen-space drawing and the toolkit coordinate conversion helpers.
+    pub fn macroquad_camera(&self) -> macroquad::camera::Camera2D {
+        macroquad::camera::Camera2D {
+            target: self.target,
+            zoom: vec2(
+                self.zoom * 2.0 / screen_width(),
+                self.zoom * 2.0 / screen_height(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    /// Apply this camera as the active macroquad camera.
+    pub fn begin(&self) {
+        set_camera(&self.macroquad_camera());
     }
 
     /// Pan the camera by the given delta in world space
@@ -240,7 +262,11 @@ impl Camera2D {
                     } else {
                         self.config.zoom_out_factor
                     };
-                    self.zoom_at(zoom_factor, mouse_position().into());
+                    if self.config.mouse_wheel_zoom_to_cursor {
+                        self.zoom_at(zoom_factor, mouse_position().into());
+                    } else {
+                        self.zoom *= zoom_factor;
+                    }
                 }
             }
         } else {

@@ -243,6 +243,237 @@ pub fn get_webhatchery_game_app_path(
     )
 }
 
+/// Shared root for multi-file save bundles.
+///
+/// Native builds read/write files under `root` with atomic writes. WASM builds
+/// use `game_name` plus each file name as the localStorage key namespace.
+#[derive(Debug, Clone)]
+pub struct SaveRoot {
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    game_name: String,
+    root: PathBuf,
+}
+
+impl SaveRoot {
+    pub fn new(game_name: impl Into<String>, root: impl Into<PathBuf>) -> Self {
+        Self {
+            game_name: game_name.into(),
+            root: root.into(),
+        }
+    }
+
+    pub fn app_data(game_name: &str) -> Result<Self, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let root = dirs::data_local_dir()
+                .map(|path| path.join(game_name))
+                .ok_or_else(|| "Could not determine save root".to_string())?;
+            Ok(Self::new(game_name, root))
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            Ok(Self::new(game_name, PathBuf::from(game_name)))
+        }
+    }
+
+    pub fn webhatchery_game_app(
+        game_slug: &str,
+        test_env_var: Option<&str>,
+    ) -> Result<Self, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(var) = test_env_var {
+                if let Ok(path) = std::env::var(var) {
+                    let path = PathBuf::from(path);
+                    let root = path
+                        .parent()
+                        .unwrap_or_else(|| Path::new("."))
+                        .to_path_buf();
+                    return Ok(Self::new(game_slug, root));
+                }
+            }
+
+            let mut root = dirs::data_dir()
+                .or_else(dirs::document_dir)
+                .or_else(|| std::env::current_dir().ok())
+                .ok_or_else(|| "Could not determine save root".to_string())?;
+            root.push("WebHatchery");
+            root.push("game_apps");
+            root.push(game_slug);
+            Ok(Self::new(game_slug, root))
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = test_env_var;
+            Ok(Self::new(
+                game_slug,
+                PathBuf::from("WebHatchery")
+                    .join("game_apps")
+                    .join(game_slug),
+            ))
+        }
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn path(&self, file_name: &str) -> PathBuf {
+        self.root.join(file_name)
+    }
+
+    pub fn save_json<T: Serialize>(&self, file_name: &str, data: &T) -> Result<(), String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            save_json_key(&self.game_name, file_name, data)
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            save_json_atomic(self.path(file_name), data)
+        }
+    }
+
+    pub fn load_json<T: DeserializeOwned>(&self, file_name: &str) -> Result<T, String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            load_json_key(&self.game_name, file_name)
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            load_json(self.path(file_name))
+        }
+    }
+
+    pub fn load_json_or_default<T>(&self, file_name: &str) -> Result<T, String>
+    where
+        T: DeserializeOwned + Default,
+    {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            fs::create_dir_all(&self.root).map_err(|e| {
+                format!(
+                    "Failed to create save root '{}': {}",
+                    self.root.display(),
+                    e
+                )
+            })?;
+        }
+
+        if !self.exists(file_name) {
+            return Ok(T::default());
+        }
+        self.load_json(file_name)
+    }
+
+    pub fn exists(&self, file_name: &str) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            json_key_exists(&self.game_name, file_name)
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.path(file_name).exists()
+        }
+    }
+
+    pub fn delete(&self, file_name: &str) -> Result<(), String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            delete_json_key(&self.game_name, file_name)
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = self.path(file_name);
+            if path.exists() {
+                fs::remove_file(&path)
+                    .map_err(|e| format!("Failed to delete '{}': {}", path.display(), e))?;
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Timer-based autosave helper for immediate-mode game loops.
+#[derive(Debug, Clone)]
+pub struct AutoSaveManager {
+    interval_seconds: f32,
+    elapsed_seconds: f32,
+    enabled: bool,
+}
+
+impl AutoSaveManager {
+    pub fn new(interval_seconds: f32) -> Self {
+        Self {
+            interval_seconds: interval_seconds.max(0.0),
+            elapsed_seconds: 0.0,
+            enabled: true,
+        }
+    }
+
+    pub fn interval_seconds(&self) -> f32 {
+        self.interval_seconds
+    }
+
+    pub fn set_interval_seconds(&mut self, interval_seconds: f32) {
+        self.interval_seconds = interval_seconds.max(0.0);
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    pub fn reset_timer(&mut self) {
+        self.elapsed_seconds = 0.0;
+    }
+
+    /// Advance the autosave timer and run `save` when the interval elapses.
+    ///
+    /// Returns `Ok(true)` only when a save was actually performed.
+    pub fn update<F>(&mut self, dt: f32, should_save: bool, save: F) -> Result<bool, String>
+    where
+        F: FnOnce() -> Result<(), String>,
+    {
+        if !self.enabled || !should_save {
+            return Ok(false);
+        }
+
+        self.elapsed_seconds += dt.max(0.0);
+        if self.elapsed_seconds < self.interval_seconds {
+            return Ok(false);
+        }
+
+        save()?;
+        self.reset_timer();
+        Ok(true)
+    }
+
+    /// Run `save` immediately and reset the timer.
+    pub fn force<F>(&mut self, save: F) -> Result<(), String>
+    where
+        F: FnOnce() -> Result<(), String>,
+    {
+        save()?;
+        self.reset_timer();
+        Ok(())
+    }
+}
+
+impl Default for AutoSaveManager {
+    fn default() -> Self {
+        Self::new(60.0)
+    }
+}
+
 /// Save raw string content to a named JSON key.
 pub fn save_string_key(game_name: &str, key: &str, content: &str) -> Result<(), String> {
     #[cfg(target_arch = "wasm32")]
@@ -625,7 +856,7 @@ pub fn get_save_slots(game_name: &str) -> Vec<String> {
             })
             .collect();
         saves.sort();
-        return saves;
+        saves
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -715,5 +946,55 @@ mod tests {
 
         assert_eq!(resolved, path);
         std::env::remove_var("TOOLKIT_TEST_SAVE_PATH");
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_save_root_loads_defaults_and_round_trips() {
+        #[derive(Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+        struct Settings {
+            volume: u32,
+        }
+
+        let root =
+            std::env::temp_dir().join(format!("toolkit_save_root_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+
+        let saves = SaveRoot::new("toolkit_test", &root);
+        let missing: Settings = saves.load_json_or_default("settings.json").unwrap();
+        assert_eq!(missing, Settings::default());
+
+        saves
+            .save_json("settings.json", &Settings { volume: 7 })
+            .unwrap();
+        let loaded: Settings = saves.load_json("settings.json").unwrap();
+        assert_eq!(loaded, Settings { volume: 7 });
+
+        saves.delete("settings.json").unwrap();
+        assert!(!saves.exists("settings.json"));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn test_autosave_manager_runs_after_interval() {
+        let mut autosave = AutoSaveManager::new(1.0);
+        let mut saves = 0;
+
+        assert!(!autosave
+            .update(0.5, true, || {
+                saves += 1;
+                Ok(())
+            })
+            .unwrap());
+        assert_eq!(saves, 0);
+
+        assert!(autosave
+            .update(0.5, true, || {
+                saves += 1;
+                Ok(())
+            })
+            .unwrap());
+        assert_eq!(saves, 1);
     }
 }

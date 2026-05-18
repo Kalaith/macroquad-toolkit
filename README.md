@@ -154,6 +154,11 @@ let mut assets = AssetManager::new();
 // Load single texture
 assets.load_texture("player", "assets/player.png").await.ok();
 
+// Load a ZIP asset pack, then keep using normal asset paths.
+// The ZIP entries should be named like assets/tiles/tile_01.png.
+assets.load_asset_pack("assets/tiles.zip").await.ok();
+assets.load_texture("tile_01", "assets/tiles/tile_01.png").await.ok();
+
 // Get texture
 if let Some(tex) = assets.get_texture("player") {
     draw_texture(tex, x, y, WHITE);
