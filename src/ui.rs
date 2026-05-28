@@ -787,8 +787,7 @@ impl RectExt for Rect {
     }
 
     fn contains_mouse(&self) -> bool {
-        let (mx, my) = mouse_position();
-        self.contains_point(vec2(mx, my))
+        self.contains_point(mouse_position_vec2())
     }
 }
 
