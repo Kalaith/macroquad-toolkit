@@ -24,6 +24,33 @@ pub fn rect_contains_point(rect: Rect, point: Vec2) -> bool {
     rect_contains(rect.x, rect.y, rect.w, rect.h, point.x, point.y)
 }
 
+/// A rectangular input target with an associated semantic value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HitTarget<T> {
+    pub rect: Rect,
+    pub value: T,
+}
+
+impl<T> HitTarget<T> {
+    pub fn new(rect: Rect, value: T) -> Self {
+        Self { rect, value }
+    }
+
+    pub fn contains_point(&self, point: Vec2) -> bool {
+        rect_contains_point(self.rect, point)
+    }
+}
+
+/// Return the value for the first target containing `point`.
+pub fn hit_test<T: Copy>(
+    targets: impl IntoIterator<Item = HitTarget<T>>,
+    point: Vec2,
+) -> Option<T> {
+    targets
+        .into_iter()
+        .find_map(|target| target.contains_point(point).then_some(target.value))
+}
+
 /// Check if mouse is hovering over a macroquad `Rect`.
 pub fn is_hovered_rect(rect: Rect) -> bool {
     let (mx, my) = mouse_position();
@@ -111,9 +138,27 @@ impl InputState {
         rect_contains_point(rect, self.mouse_pos)
     }
 
+    /// Return the semantic value for the target under the captured mouse position.
+    pub fn hovered_target<T: Copy>(
+        &self,
+        targets: impl IntoIterator<Item = HitTarget<T>>,
+    ) -> Option<T> {
+        hit_test(targets, self.mouse_pos)
+    }
+
     /// Check whether the left mouse button was pressed over a `Rect`.
     pub fn left_pressed_rect(&self, rect: Rect) -> bool {
         self.left_pressed && self.hovered_rect(rect)
+    }
+
+    /// Return the semantic value for the target pressed by the left mouse button.
+    pub fn left_pressed_target<T: Copy>(
+        &self,
+        targets: impl IntoIterator<Item = HitTarget<T>>,
+    ) -> Option<T> {
+        self.left_pressed
+            .then(|| self.hovered_target(targets))
+            .flatten()
     }
 
     /// Check whether the left mouse button was released over a `Rect`.
@@ -121,13 +166,65 @@ impl InputState {
         self.left_released && self.hovered_rect(rect)
     }
 
+    /// Return the semantic value for the target released by the left mouse button.
+    pub fn left_released_target<T: Copy>(
+        &self,
+        targets: impl IntoIterator<Item = HitTarget<T>>,
+    ) -> Option<T> {
+        self.left_released
+            .then(|| self.hovered_target(targets))
+            .flatten()
+    }
+
     /// Check whether the right mouse button was pressed over a `Rect`.
     pub fn right_pressed_rect(&self, rect: Rect) -> bool {
         self.right_pressed && self.hovered_rect(rect)
     }
 
+    /// Return the semantic value for the target pressed by the right mouse button.
+    pub fn right_pressed_target<T: Copy>(
+        &self,
+        targets: impl IntoIterator<Item = HitTarget<T>>,
+    ) -> Option<T> {
+        self.right_pressed
+            .then(|| self.hovered_target(targets))
+            .flatten()
+    }
+
     /// Check whether the right mouse button was released over a `Rect`.
     pub fn right_released_rect(&self, rect: Rect) -> bool {
         self.right_released && self.hovered_rect(rect)
+    }
+
+    /// Return the semantic value for the target released by the right mouse button.
+    pub fn right_released_target<T: Copy>(
+        &self,
+        targets: impl IntoIterator<Item = HitTarget<T>>,
+    ) -> Option<T> {
+        self.right_released
+            .then(|| self.hovered_target(targets))
+            .flatten()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hit_test_returns_first_matching_target() {
+        let targets = [
+            HitTarget::new(Rect::new(0.0, 0.0, 10.0, 10.0), "first"),
+            HitTarget::new(Rect::new(0.0, 0.0, 20.0, 20.0), "second"),
+        ];
+
+        assert_eq!(hit_test(targets, vec2(5.0, 5.0)), Some("first"));
+    }
+
+    #[test]
+    fn hit_test_ignores_points_outside_targets() {
+        let targets = [HitTarget::new(Rect::new(0.0, 0.0, 10.0, 10.0), 7)];
+
+        assert_eq!(hit_test(targets, vec2(12.0, 5.0)), None);
     }
 }

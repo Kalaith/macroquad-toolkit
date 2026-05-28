@@ -76,6 +76,15 @@ let input = InputState::capture();
 if input.left_click {
     // ...
 }
+
+// Map rectangles to semantic actions
+let action = hit_test(
+    [
+        HitTarget::new(Rect::new(10.0, 10.0, 80.0, 24.0), "inventory"),
+        HitTarget::new(Rect::new(96.0, 10.0, 80.0, 24.0), "map"),
+    ],
+    input.mouse_pos,
+);
 ```
 
 ### UI (`ui` module)
