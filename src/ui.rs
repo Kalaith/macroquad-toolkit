@@ -3,9 +3,87 @@
 use crate::colors::dark;
 use crate::input::*;
 use macroquad::prelude::*;
+use std::cell::RefCell;
+
+thread_local! {
+    static DEFAULT_UI_FONT: RefCell<Option<&'static Font>> = const { RefCell::new(None) };
+    static UI_TEXT_SCALE: RefCell<f32> = const { RefCell::new(1.0) };
+    static MIN_UI_FONT_SIZE: RefCell<f32> = const { RefCell::new(1.0) };
+}
 
 fn font_size_u16(font_size: f32) -> u16 {
     font_size.round().clamp(1.0, u16::MAX as f32) as u16
+}
+
+fn ui_text_scale() -> f32 {
+    UI_TEXT_SCALE.with(|stored| stored.borrow().clamp(0.25, 4.0))
+}
+
+fn min_ui_font_size() -> f32 {
+    MIN_UI_FONT_SIZE.with(|stored| stored.borrow().clamp(1.0, 96.0))
+}
+
+fn effective_font_size(font_size: f32) -> f32 {
+    font_size.max(min_ui_font_size()) * ui_text_scale()
+}
+
+fn effective_line_gap(line_gap: f32) -> f32 {
+    line_gap * ui_text_scale()
+}
+
+/// Register a default font used by toolkit text helpers when no explicit font is supplied.
+///
+/// This is intended to be called once during game startup. The font is retained for the
+/// process lifetime so `TextStyle::params()` can safely return Macroquad's borrowed font params.
+pub fn set_default_ui_font(font: Font) {
+    let font = Box::leak(Box::new(font));
+    DEFAULT_UI_FONT.with(|stored| {
+        *stored.borrow_mut() = Some(font);
+    });
+}
+
+/// Decode and register a default font from embedded TTF/OTF bytes.
+pub fn set_default_ui_font_from_bytes(bytes: &'static [u8]) -> Result<(), String> {
+    let font = load_ttf_font_from_bytes(bytes)
+        .map_err(|err| format!("failed to load default UI font: {err:?}"))?;
+    set_default_ui_font(font);
+    Ok(())
+}
+
+/// Return the registered default UI font, if one has been set.
+pub fn default_ui_font() -> Option<&'static Font> {
+    DEFAULT_UI_FONT.with(|stored| *stored.borrow())
+}
+
+/// Set a global multiplier used by toolkit text helpers.
+///
+/// This is useful for dense fixed-resolution UIs when the canvas is being displayed below
+/// its logical resolution. The scale affects drawing and text measurement consistently.
+pub fn set_ui_text_scale(scale: f32) {
+    UI_TEXT_SCALE.with(|stored| {
+        *stored.borrow_mut() = scale.clamp(0.25, 4.0);
+    });
+}
+
+/// Set the minimum logical font size used by toolkit text helpers.
+pub fn set_min_ui_font_size(font_size: f32) {
+    MIN_UI_FONT_SIZE.with(|stored| {
+        *stored.borrow_mut() = font_size.clamp(1.0, 96.0);
+    });
+}
+
+/// Scale text up when a fixed logical UI is displayed below its design resolution.
+pub fn set_ui_text_scale_for_screen(
+    logical_width: f32,
+    logical_height: f32,
+    max_scale: f32,
+) -> f32 {
+    let pixel_scale = (screen_width() / logical_width.max(1.0))
+        .min(screen_height() / logical_height.max(1.0))
+        .max(0.01);
+    let scale = (1.0 / pixel_scale).clamp(1.0, max_scale.max(1.0));
+    set_ui_text_scale(scale);
+    scale
 }
 
 #[derive(Debug, Clone)]
@@ -44,10 +122,22 @@ impl<'a> TextStyle<'a> {
         self
     }
 
+    pub fn resolved_font(&self) -> Option<&'a Font> {
+        self.font.or(default_ui_font())
+    }
+
+    pub fn effective_font_size(&self) -> f32 {
+        effective_font_size(self.font_size)
+    }
+
+    pub fn effective_line_gap(&self) -> f32 {
+        effective_line_gap(self.line_gap)
+    }
+
     pub fn params(&self) -> TextParams<'a> {
         TextParams {
-            font: self.font,
-            font_size: font_size_u16(self.font_size),
+            font: self.resolved_font(),
+            font_size: font_size_u16(self.effective_font_size()),
             color: self.color,
             ..Default::default()
         }
@@ -62,7 +152,12 @@ impl Default for TextStyle<'_> {
 
 /// Measure text using a [`TextStyle`].
 pub fn measure_text_size(text: &str, style: TextStyle<'_>) -> TextDimensions {
-    measure_text(text, style.font, font_size_u16(style.font_size), 1.0)
+    measure_text(
+        text,
+        style.resolved_font(),
+        font_size_u16(style.effective_font_size()),
+        1.0,
+    )
 }
 
 /// Format an integer currency value with comma separators.
@@ -1158,6 +1253,8 @@ pub fn truncate_text_to_width_ex(
     font: Option<&Font>,
     font_size: f32,
 ) -> String {
+    let font = font.or(default_ui_font());
+    let font_size = effective_font_size(font_size);
     if measure_text(text, font, font_size_u16(font_size), 1.0).width <= max_width {
         return text.to_owned();
     }
@@ -1189,6 +1286,8 @@ pub fn wrap_text_ex(
     font: Option<&Font>,
     font_size: f32,
 ) -> Vec<String> {
+    let font = font.or(default_ui_font());
+    let font_size = effective_font_size(font_size);
     let mut wrapped = Vec::new();
 
     for paragraph in text.split('\n') {
@@ -1271,11 +1370,13 @@ pub fn fit_text_to_box_ex(
     min_font_size: f32,
 ) -> TextLayoutResult {
     let mut font_size = style.font_size;
+    let line_gap = style.effective_line_gap();
 
     while font_size >= min_font_size {
         let lines = wrap_text_ex(text, max_width, style.font, font_size);
-        let total_height = lines.len() as f32 * font_size
-            + (lines.len().saturating_sub(1) as f32 * style.line_gap);
+        let draw_font_size = effective_font_size(font_size);
+        let total_height = lines.len() as f32 * draw_font_size
+            + (lines.len().saturating_sub(1) as f32 * line_gap);
         if total_height <= max_height {
             return TextLayoutResult {
                 lines,
@@ -1287,7 +1388,8 @@ pub fn fit_text_to_box_ex(
     }
 
     let font_size = min_font_size.max(1.0);
-    let max_lines = ((max_height + style.line_gap) / (font_size + style.line_gap))
+    let draw_font_size = effective_font_size(font_size);
+    let max_lines = ((max_height + line_gap) / (draw_font_size + line_gap))
         .floor()
         .max(1.0) as usize;
     let mut lines = wrap_text_ex(text, max_width, style.font, font_size);
@@ -1337,7 +1439,9 @@ pub fn draw_text_block_ex(
     min_font_size: f32,
 ) -> TextLayoutResult {
     let layout = fit_text_to_box_ex(text, w, h, style, min_font_size);
-    let mut line_y = y + layout.font_size;
+    let draw_font_size = effective_font_size(layout.font_size);
+    let line_gap = style.effective_line_gap();
+    let mut line_y = y + draw_font_size;
     for line in &layout.lines {
         draw_text_ex(
             line,
@@ -1349,7 +1453,7 @@ pub fn draw_text_block_ex(
             }
             .params(),
         );
-        line_y += layout.font_size + style.line_gap;
+        line_y += draw_font_size + line_gap;
     }
     layout
 }
@@ -1375,12 +1479,20 @@ pub fn draw_text_centered_in_box_ex(
     style: TextStyle<'_>,
 ) -> TextLayoutResult {
     let layout = fit_text_to_box_ex(text, w, h, style, 10.0);
-    let total_height = layout.lines.len() as f32 * layout.font_size
-        + (layout.lines.len().saturating_sub(1) as f32 * style.line_gap);
-    let mut line_y = y + ((h - total_height) * 0.5) + layout.font_size;
+    let draw_font_size = effective_font_size(layout.font_size);
+    let line_gap = style.effective_line_gap();
+    let total_height = layout.lines.len() as f32 * draw_font_size
+        + (layout.lines.len().saturating_sub(1) as f32 * line_gap);
+    let mut line_y = y + ((h - total_height) * 0.5) + draw_font_size;
 
     for line in &layout.lines {
-        let line_width = measure_text(line, style.font, font_size_u16(layout.font_size), 1.0).width;
+        let line_width = measure_text(
+            line,
+            style.resolved_font(),
+            font_size_u16(draw_font_size),
+            1.0,
+        )
+        .width;
         let line_x = x + (w - line_width) * 0.5;
         draw_text_ex(
             line,
@@ -1392,7 +1504,7 @@ pub fn draw_text_centered_in_box_ex(
             }
             .params(),
         );
-        line_y += layout.font_size + style.line_gap;
+        line_y += draw_font_size + line_gap;
     }
 
     layout
@@ -1410,7 +1522,13 @@ pub fn draw_text_centered(text: &str, center_x: f32, baseline_y: f32, style: Tex
 }
 
 pub fn draw_text_right(text: &str, right_x: f32, baseline_y: f32, style: TextStyle<'_>) {
-    let width = measure_text(text, style.font, font_size_u16(style.font_size), 1.0).width;
+    let width = measure_text(
+        text,
+        style.resolved_font(),
+        font_size_u16(style.effective_font_size()),
+        1.0,
+    )
+    .width;
     draw_text_ex(text, right_x - width, baseline_y, style.params());
 }
 
@@ -1562,6 +1680,9 @@ pub fn draw_tooltip_styled(
     style: &TooltipStyle,
     font: Option<&Font>,
 ) -> Rect {
+    let font = font.or(default_ui_font());
+    let font_size = effective_font_size(style.font_size);
+    let line_gap = effective_line_gap(style.line_gap);
     let lines = wrap_text_ex(
         text,
         (style.max_width - style.padding * 2.0).max(1.0),
@@ -1570,10 +1691,10 @@ pub fn draw_tooltip_styled(
     );
     let content_width = lines
         .iter()
-        .map(|line| measure_text(line, font, font_size_u16(style.font_size), 1.0).width)
+        .map(|line| measure_text(line, font, font_size_u16(font_size), 1.0).width)
         .fold(0.0, f32::max);
-    let content_height = lines.len() as f32 * style.font_size
-        + lines.len().saturating_sub(1) as f32 * style.line_gap;
+    let content_height =
+        lines.len() as f32 * font_size + lines.len().saturating_sub(1) as f32 * line_gap;
     let width = (content_width + style.padding * 2.0).min(style.max_width);
     let height = content_height + style.padding * 2.0;
 
@@ -1588,7 +1709,7 @@ pub fn draw_tooltip_styled(
     draw_rectangle(rect.x, rect.y, rect.w, rect.h, style.background);
     draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 1.0, style.border);
 
-    let mut y = rect.y + style.padding + style.font_size;
+    let mut y = rect.y + style.padding + font_size;
     let text_style = TextStyle {
         font,
         font_size: style.font_size,
@@ -1597,7 +1718,7 @@ pub fn draw_tooltip_styled(
     };
     for line in &lines {
         draw_text_ex(line, rect.x + style.padding, y, text_style.params());
-        y += style.font_size + style.line_gap;
+        y += font_size + line_gap;
     }
 
     rect

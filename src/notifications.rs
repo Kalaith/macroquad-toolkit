@@ -23,7 +23,7 @@
 use macroquad::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::ui::truncate_text_to_width;
+use crate::ui::{truncate_text_to_width, TextStyle};
 
 /// Type of notification for styling purposes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -341,7 +341,12 @@ pub fn draw_notification(
     let max_text_width = config.width - config.padding * 2.0 - 8.0;
     let message = truncate_text_to_width(&notification.message, max_text_width, config.font_size);
     let text_y = y + (config.row_height + config.font_size) * 0.5 - 3.0;
-    draw_text(&message, text_x, text_y, config.font_size, text_color);
+    draw_text_ex(
+        &message,
+        text_x,
+        text_y,
+        TextStyle::new(config.font_size, text_color).params(),
+    );
 }
 
 #[cfg(test)]

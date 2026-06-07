@@ -51,6 +51,11 @@ pub fn chance(probability: f32) -> bool {
     rand::gen_range(0.0, 1.0) < probability
 }
 
+/// Return true with a whole-number percentage chance from 0 to 100.
+pub fn chance_percent(percent: i32) -> bool {
+    rand::gen_range(0, 100) < percent.clamp(0, 100)
+}
+
 /// Shuffle a slice in place using Fisher-Yates algorithm
 pub fn shuffle<T>(slice: &mut [T]) {
     for i in (1..slice.len()).rev() {
@@ -69,6 +74,22 @@ pub fn choose<T>(slice: &[T]) -> Option<&T> {
     } else {
         Some(&slice[rand::gen_range(0, slice.len())])
     }
+}
+
+/// Pick up to `count` random unique elements from a slice.
+pub fn choose_multiple<T>(slice: &[T], count: usize) -> Vec<&T> {
+    if slice.is_empty() || count == 0 {
+        return Vec::new();
+    }
+
+    let mut indices: Vec<usize> = (0..slice.len()).collect();
+    shuffle(&mut indices);
+
+    indices
+        .into_iter()
+        .take(count.min(slice.len()))
+        .map(|index| &slice[index])
+        .collect()
 }
 
 /// Pick a random mutable element from a slice
