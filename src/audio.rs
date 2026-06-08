@@ -2,7 +2,8 @@
 //!
 //! Handles loading and playing sound effects with volume control.
 
-use macroquad::audio::{load_sound, play_sound, PlaySoundParams, Sound};
+use crate::assets::AssetPack;
+use macroquad::audio::{load_sound, load_sound_from_bytes, play_sound, PlaySoundParams, Sound};
 use std::collections::HashMap;
 
 /// Trait for easier sound indexing (usually an Enum)
@@ -12,6 +13,7 @@ impl<T: std::cmp::Eq + std::hash::Hash + Copy> SoundId for T {}
 /// Generic Sound Manager
 pub struct SoundManager<T: SoundId> {
     sounds: HashMap<T, Sound>,
+    asset_packs: Vec<AssetPack>,
     pub sfx_volume: f32,
     pub music_volume: f32,
     pub visible: bool, // Can be used to mute when window is hidden
@@ -22,6 +24,7 @@ impl<T: SoundId> SoundManager<T> {
     pub fn new() -> Self {
         Self {
             sounds: HashMap::new(),
+            asset_packs: Vec::new(),
             sfx_volume: 1.0,
             music_volume: 1.0,
             visible: true,
@@ -30,6 +33,11 @@ impl<T: SoundId> SoundManager<T> {
 
     /// Load a sound and associate it with an ID
     pub async fn load_sound(&mut self, id: T, path: &str) -> Result<(), String> {
+        if let Some(sound) = self.load_sound_from_loaded_packs(path).await? {
+            self.sounds.insert(id, sound);
+            return Ok(());
+        }
+
         match load_sound(path).await {
             Ok(sound) => {
                 self.sounds.insert(id, sound);
@@ -37,6 +45,32 @@ impl<T: SoundId> SoundManager<T> {
             }
             Err(e) => Err(format!("Failed to load sound '{}': {:?}", path, e)),
         }
+    }
+
+    /// Load a ZIP asset pack. Later `load_sound` calls check loaded packs before loose files.
+    pub async fn load_asset_pack(&mut self, path: &str) -> Result<usize, String> {
+        let pack = AssetPack::load(path).await?;
+        let file_count = pack.len();
+        self.asset_packs.push(pack);
+        Ok(file_count)
+    }
+
+    /// Add an already-loaded asset pack.
+    pub fn add_asset_pack(&mut self, pack: AssetPack) {
+        self.asset_packs.push(pack);
+    }
+
+    async fn load_sound_from_loaded_packs(&self, path: &str) -> Result<Option<Sound>, String> {
+        for pack in &self.asset_packs {
+            if let Some(bytes) = pack.bytes(path) {
+                return load_sound_from_bytes(bytes)
+                    .await
+                    .map(Some)
+                    .map_err(|e| format!("Failed to decode packed sound '{}': {:?}", path, e));
+            }
+        }
+
+        Ok(None)
     }
 
     /// Play a sound effect

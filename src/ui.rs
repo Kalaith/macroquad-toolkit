@@ -1375,8 +1375,8 @@ pub fn fit_text_to_box_ex(
     while font_size >= min_font_size {
         let lines = wrap_text_ex(text, max_width, style.font, font_size);
         let draw_font_size = effective_font_size(font_size);
-        let total_height = lines.len() as f32 * draw_font_size
-            + (lines.len().saturating_sub(1) as f32 * line_gap);
+        let total_height =
+            lines.len() as f32 * draw_font_size + (lines.len().saturating_sub(1) as f32 * line_gap);
         if total_height <= max_height {
             return TextLayoutResult {
                 lines,

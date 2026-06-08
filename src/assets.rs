@@ -330,6 +330,27 @@ impl AssetPack {
     }
 }
 
+/// Load a texture from an optional asset pack, falling back to the loose file path.
+pub async fn load_texture_from_pack_or_file(
+    asset_pack: Option<&AssetPack>,
+    path: &str,
+    filter: FilterMode,
+) -> Result<Texture2D, String> {
+    if let Some(pack) = asset_pack {
+        if let Ok(texture) = pack.texture(path, filter) {
+            return Ok(texture);
+        }
+    }
+
+    match load_texture(path).await {
+        Ok(texture) => {
+            texture.set_filter(filter);
+            Ok(texture)
+        }
+        Err(e) => Err(format!("Failed to load texture '{}': {:?}", path, e)),
+    }
+}
+
 fn normalize_asset_pack_path(path: &str) -> String {
     let mut normalized = path.replace('\\', "/");
     while let Some(stripped) = normalized.strip_prefix("./") {
