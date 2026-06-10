@@ -1594,7 +1594,9 @@ impl VirtualUi {
     pub fn camera(&self) -> macroquad::camera::Camera2D {
         macroquad::camera::Camera2D {
             target: vec2(self.logical_width * 0.5, self.logical_height * 0.5),
-            zoom: vec2(2.0 / self.logical_width, -2.0 / self.logical_height),
+            // Camera2D already applies the screen-space Y inversion for non-render-target draws.
+            // A positive Y zoom keeps virtual UI coordinates top-left anchored like Macroquad's default.
+            zoom: vec2(2.0 / self.logical_width, 2.0 / self.logical_height),
             viewport: Some(self.viewport()),
             ..Default::default()
         }
