@@ -37,6 +37,21 @@ pub fn rand() -> f32 {
     rand::gen_range(0.0, 1.0)
 }
 
+/// Seed Macroquad's shared random generator.
+pub fn srand(seed: u64) {
+    rand::srand(seed);
+}
+
+/// Generate a random `u64`, useful for visual seeds and IDs.
+pub fn random_u64() -> u64 {
+    rand::gen_range(0u64, u64::MAX)
+}
+
+/// Generate a random `u32`, useful for compact IDs and legacy helper APIs.
+pub fn random_u32() -> u32 {
+    rand::gen_range(0u32, u32::MAX)
+}
+
 /// Generate a random value within a range
 /// Supports floats (0.0, 1.0) and integers (0, 10)
 pub fn gen_range<T>(low: T, high: T) -> T
@@ -48,7 +63,7 @@ where
 
 /// Return true with a given probability (0.0 to 1.0)
 pub fn chance(probability: f32) -> bool {
-    rand::gen_range(0.0, 1.0) < probability
+    rand::gen_range(0.0, 1.0) < probability.clamp(0.0, 1.0)
 }
 
 /// Return true with a whole-number percentage chance from 0 to 100.

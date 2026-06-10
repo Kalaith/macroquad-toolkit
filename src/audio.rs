@@ -124,3 +124,34 @@ impl<T: SoundId> Default for SoundManager<T> {
         Self::new()
     }
 }
+
+/// Load a sound from an optional asset pack, falling back to the loose file path.
+pub async fn load_sound_from_pack_or_file(
+    asset_pack: Option<&AssetPack>,
+    path: &str,
+) -> Result<Sound, String> {
+    let mut failures = Vec::new();
+
+    if let Some(pack) = asset_pack {
+        if let Some(bytes) = pack.bytes(path) {
+            match load_sound_from_bytes(bytes).await {
+                Ok(sound) => return Ok(sound),
+                Err(error) => failures.push(format!("packed decode failed: {error:?}")),
+            }
+        } else {
+            failures.push("missing from asset pack".to_owned());
+        }
+    }
+
+    match load_sound(path).await {
+        Ok(sound) => Ok(sound),
+        Err(error) => {
+            failures.push(format!("loose file load failed: {error:?}"));
+            Err(format!(
+                "Failed to load sound '{}': {}",
+                path,
+                failures.join("; ")
+            ))
+        }
+    }
+}
