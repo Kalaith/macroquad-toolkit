@@ -397,3 +397,10 @@ let row: (i64,) = sqlx::query_as("SELECT count(*) FROM players")
 
 
 This toolkit is extracted from game projects and shared for reuse across multiple games.
+# Practical Future Improvements
+
+- Add public API docs and compatibility tests for UI primitives, layout helpers, font loading, surface drawing, and widgets.
+- Provide shared save/load migration helpers and asset-loading diagnostics that games can opt into instead of duplicating recovery code.
+- Add micro-benchmarks for text layout, panel drawing, cached fonts, and widget hit-testing under common WebGL screen sizes.
+- Create example screens that demonstrate toolkit patterns for menus, overlays, panels, notifications, and responsive scaling.
+
