@@ -11,6 +11,7 @@ A collection of common utilities for Macroquad game development, extracted from 
 - **Event bus**: Generic event system for decoupled game logic
 - **Color palettes**: Consistent dark theme colors
 - **Sprite system**: Builder pattern for texture rendering with transformations
+- **Screenshot capture**: Env-var-driven headless capture harness for visual verification
 
 ## Usage
 
@@ -185,6 +186,68 @@ let sprite = Sprite::new()
 
 sprite.draw();
 ```
+
+### Capture (`capture` module)
+
+Headless screenshot harness: when a `PREFIX_CAPTURE_PATH` env var is set, the
+game boots into a chosen scene, simulates a fixed number of frames at a fixed
+timestep, writes a PNG, and exits. This makes UI changes visually verifiable
+from a script (or by an AI agent reading the PNG back) with no interactive
+input. Full walkthrough and gotchas: `docs/screenshot_capture_harness_guide.md`.
+
+```rust
+use macroquad_toolkit::capture;
+
+fn window_conf() -> Conf {
+    // Reads MYGAME_WINDOW_WIDTH/HEIGHT overrides; disables high_dpi while
+    // capturing so screenshots are pixel-aligned with the logical layout.
+    capture::capture_window_conf("MYGAME", "My Game", 1280, 720)
+}
+
+#[macroquad::main(window_conf)]
+async fn main() {
+    let mut game = Game::new().await;
+
+    if let Some(config) = capture::CaptureConfig::from_env("MYGAME") {
+        game.begin_capture_scene(&config.scene); // your scene-seeding method
+        capture::run_capture(&config, |dt| {
+            game.update(dt);
+            game.draw();
+        })
+        .await;
+        return;
+    }
+
+    loop { /* normal interactive loop */ }
+}
+```
+
+The only per-game code is `begin_capture_scene(&str)` — a method that puts the
+session into a named scene (e.g. `"gameplay"`, `"map"`, `"loadout"`) so the
+capture starts in the state you want to photograph.
+
+Env vars (replace `MYGAME` with your per-game prefix):
+
+- `MYGAME_CAPTURE_PATH` — output PNG path; presence enables capture mode
+- `MYGAME_CAPTURE_SCENE` — scene name (default `gameplay`)
+- `MYGAME_CAPTURE_FRAMES` — frames to simulate before capture (default 150)
+- `MYGAME_WINDOW_WIDTH` / `MYGAME_WINDOW_HEIGHT` — window size override
+
+All env access is stubbed out on `wasm32`, so web builds are unaffected.
+
+A shared wrapper script (`macroquad-toolkit/scripts/capture_ui.ps1`) builds the
+game, runs one capture per scene, and sanity-checks each PNG. It derives the
+package name, exe path, and env prefix from `cargo metadata`, so from a game
+directory it needs no arguments:
+
+```powershell
+& ..\macroquad-toolkit\scripts\capture_ui.ps1 -Scenes gameplay,map
+& ..\macroquad-toolkit\scripts\capture_ui.ps1 -Scenes gameplay -SkipBuild
+```
+
+Pass `-Prefix` if the game's env-var prefix differs from its package name
+(e.g. `carriage_run` uses `CARRIAGE`). See `carriage_run` for a reference
+integration, including a thin per-game `scripts/capture_ui.ps1` wrapper.
 
 ## Button Click Semantics
 

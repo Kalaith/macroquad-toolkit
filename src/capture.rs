@@ -1,0 +1,163 @@
+//! Headless screenshot capture harness.
+//!
+//! Lets a game screenshot *itself*: when a `PREFIX_CAPTURE_PATH` env var is
+//! set, the game boots into a chosen scene, steps the simulation a fixed
+//! number of frames at a fixed timestep, writes a PNG, and exits. This makes
+//! UI/rendering changes visually verifiable from a script (or by an AI agent
+//! that reads the PNG back) with no interactive input.
+//!
+//! Env vars (replace `PREFIX` with your game's prefix, e.g. `CARRIAGE`):
+//! - `PREFIX_CAPTURE_PATH` — output PNG path; presence enables capture mode
+//! - `PREFIX_CAPTURE_SCENE` — scene name passed to your seeding code (default "gameplay")
+//! - `PREFIX_CAPTURE_FRAMES` — frames to simulate before capturing (default 150)
+//! - `PREFIX_WINDOW_WIDTH` / `PREFIX_WINDOW_HEIGHT` — window size override
+//!
+//! Integration (see `docs/screenshot_capture_harness_guide.md` for the full
+//! walkthrough and gotchas):
+//!
+//! ```ignore
+//! fn window_conf() -> Conf {
+//!     capture::capture_window_conf("MYGAME", "My Game", 1280, 720)
+//! }
+//!
+//! #[macroquad::main(window_conf)]
+//! async fn main() {
+//!     let mut game = Game::new().await;
+//!
+//!     if let Some(config) = capture::CaptureConfig::from_env("MYGAME") {
+//!         game.begin_capture_scene(&config.scene);
+//!         capture::run_capture(&config, |dt| {
+//!             game.update(dt);
+//!             game.draw();
+//!         })
+//!         .await;
+//!         return;
+//!     }
+//!
+//!     loop { /* normal interactive loop */ }
+//! }
+//! ```
+//!
+//! All env access is stubbed out on `wasm32`, so web builds are unaffected.
+
+use macroquad::prelude::*;
+
+/// Capture parameters read from `PREFIX_CAPTURE_*` env vars.
+#[derive(Debug, Clone)]
+pub struct CaptureConfig {
+    /// Output PNG path (`PREFIX_CAPTURE_PATH`).
+    pub path: String,
+    /// Scene name to seed before capturing (`PREFIX_CAPTURE_SCENE`, default "gameplay").
+    pub scene: String,
+    /// Number of frames to simulate before writing the PNG (`PREFIX_CAPTURE_FRAMES`, default 150).
+    pub frames: u32,
+    /// Fixed timestep per simulated frame. Fixed (not `get_frame_time()`) so
+    /// repeated runs are deterministic. Default 1/60.
+    pub timestep: f32,
+}
+
+impl CaptureConfig {
+    /// Returns `Some` when `PREFIX_CAPTURE_PATH` is set, i.e. the process was
+    /// launched in capture mode. Always `None` on wasm32.
+    pub fn from_env(prefix: &str) -> Option<Self> {
+        let path = env_string(&format!("{prefix}_CAPTURE_PATH"))?;
+        Some(Self {
+            path,
+            scene: env_string(&format!("{prefix}_CAPTURE_SCENE"))
+                .unwrap_or_else(|| "gameplay".to_owned()),
+            frames: env_u32(&format!("{prefix}_CAPTURE_FRAMES"), 150).max(1),
+            timestep: 1.0 / 60.0,
+        })
+    }
+}
+
+/// True when the process was launched in capture mode (`PREFIX_CAPTURE_PATH` set).
+pub fn capture_requested(prefix: &str) -> bool {
+    env_string(&format!("{prefix}_CAPTURE_PATH")).is_some()
+}
+
+/// Capture-aware `Conf` for `#[macroquad::main(window_conf)]`.
+///
+/// Reads `PREFIX_WINDOW_WIDTH/HEIGHT` overrides and disables `high_dpi` while
+/// capturing so the screenshot framebuffer is pixel-aligned with the logical
+/// UI layout (on scaled displays `high_dpi: true` captures at 2x size).
+pub fn capture_window_conf(prefix: &str, title: &str, default_width: i32, default_height: i32) -> Conf {
+    Conf {
+        window_title: title.to_owned(),
+        window_width: env_i32(&format!("{prefix}_WINDOW_WIDTH"), default_width),
+        window_height: env_i32(&format!("{prefix}_WINDOW_HEIGHT"), default_height),
+        window_resizable: true,
+        high_dpi: !capture_requested(prefix),
+        ..Default::default()
+    }
+}
+
+/// Screenshot harness loop: call `frame(timestep)` (your update + draw) a fixed
+/// number of times, write the PNG, then exit the process.
+///
+/// Seed your scene (e.g. `game.begin_capture_scene(&config.scene)`) before
+/// calling this.
+pub async fn run_capture<F: FnMut(f32)>(config: &CaptureConfig, mut frame: F) {
+    let mut rendered = 0;
+    loop {
+        frame(config.timestep);
+        rendered += 1;
+        // Read the framebuffer after drawing this frame but before presenting
+        // it; reading after `next_frame` would return the swapped/cleared
+        // buffer (a solid-black PNG).
+        if rendered >= config.frames {
+            get_screen_data().export_png(&config.path);
+            break;
+        }
+        next_frame().await;
+    }
+
+    println!(
+        "captured {} (scene: {}, {} frames)",
+        config.path, config.scene, config.frames
+    );
+    std::process::exit(0);
+}
+
+/// Read an env var as an `i32`, falling back on missing/unparsable values.
+pub fn env_i32(name: &str, fallback: i32) -> i32 {
+    env_string(name)
+        .and_then(|value| value.parse::<i32>().ok())
+        .unwrap_or(fallback)
+}
+
+/// Read an env var as a `u32`, falling back on missing/unparsable values.
+pub fn env_u32(name: &str, fallback: u32) -> u32 {
+    env_string(name)
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(fallback)
+}
+
+/// Read an env var as a bool: unset uses the fallback; `0`/`false` are false,
+/// anything else is true.
+pub fn env_bool(name: &str, fallback: bool) -> bool {
+    env_string(name)
+        .map(|value| value != "0" && !value.eq_ignore_ascii_case("false"))
+        .unwrap_or(fallback)
+}
+
+/// Read an env var as a `f32`, falling back on missing/unparsable values.
+pub fn env_f32(name: &str, fallback: f32) -> f32 {
+    env_string(name)
+        .and_then(|value| value.parse::<f32>().ok())
+        .unwrap_or(fallback)
+}
+
+/// Read an env var. Always `None` on wasm32 (no env access in the browser).
+pub fn env_string(name: &str) -> Option<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::var(name).ok()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = name;
+        None
+    }
+}

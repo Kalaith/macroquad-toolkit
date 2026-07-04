@@ -35,12 +35,14 @@
 //! ## Other
 //! - [`audio`] - Audio playback utilities
 //! - [`events`] - Event handling utilities
+//! - [`capture`] - Headless screenshot capture harness (env-var driven)
 //! - [`db`] - Database support (optional, requires `db` feature)
 
 // Core 2D modules (existing)
 pub mod assets;
 pub mod audio;
 pub mod camera;
+pub mod capture;
 pub mod colors;
 pub mod events;
 pub mod input;
@@ -85,6 +87,9 @@ pub mod prelude {
     pub use crate::notifications::{NotificationManager, NotificationType};
     pub use crate::rng::*;
     pub use crate::states::*;
+
+    // Screenshot capture harness
+    pub use crate::capture::{capture_requested, capture_window_conf, run_capture, CaptureConfig};
 }
 
 /// Re-exports for 3D game development
