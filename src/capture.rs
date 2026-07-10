@@ -81,7 +81,12 @@ pub fn capture_requested(prefix: &str) -> bool {
 /// Reads `PREFIX_WINDOW_WIDTH/HEIGHT` overrides and disables `high_dpi` while
 /// capturing so the screenshot framebuffer is pixel-aligned with the logical
 /// UI layout (on scaled displays `high_dpi: true` captures at 2x size).
-pub fn capture_window_conf(prefix: &str, title: &str, default_width: i32, default_height: i32) -> Conf {
+pub fn capture_window_conf(
+    prefix: &str,
+    title: &str,
+    default_width: i32,
+    default_height: i32,
+) -> Conf {
     Conf {
         window_title: title.to_owned(),
         window_width: env_i32(&format!("{prefix}_WINDOW_WIDTH"), default_width),
