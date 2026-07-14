@@ -6,7 +6,9 @@
 //! dungeon_core, and feast_frenzy.
 
 mod fade;
+mod particles;
 mod shake;
 
 pub use fade::*;
+pub use particles::*;
 pub use shake::*;
