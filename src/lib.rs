@@ -44,6 +44,7 @@ pub mod audio;
 pub mod camera;
 pub mod capture;
 pub mod colors;
+pub mod debug;
 pub mod events;
 pub mod fx;
 pub mod input;
