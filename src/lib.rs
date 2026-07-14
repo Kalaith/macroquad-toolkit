@@ -50,6 +50,7 @@ pub mod math;
 pub mod rng;
 pub mod sprite;
 pub mod states;
+pub mod timing;
 pub mod ui;
 
 // New modules extracted from dungeon_manager
