@@ -26,6 +26,12 @@
 //! - [`notifications`] - Toast notification system
 //! - [`states`] - Game state machine helpers
 //! - [`rng`] - Random number utilities
+//! - [`math`] - Interpolation, easing, pulse, and tween helpers
+//! - [`timing`] - Cooldowns, timers, interval tickers, phase timelines
+//! - [`fx`] - Screen shake, screen fades, particles, floating text
+//! - [`settings`] - Shared user-settings model with persistence
+//! - [`achievements`] - Achievement registry with unlock tracking
+//! - [`debug`] - FPS / frame-time debug overlay
 //!
 //! ## Data & Persistence
 //! - [`persistence`] - Save/load system (native + WASM)
@@ -77,9 +83,14 @@ pub mod wasm_storage;
 /// Convenient re-exports for common 2D game development usage
 pub mod prelude {
     // Input and UI
-    pub use crate::colors::dark;
+    pub use crate::colors::{dark, darken, lerp_color, lighten, mix, multiply_alpha, with_alpha};
     pub use crate::input::*;
     pub use crate::ui::*;
+
+    // Effects and timing
+    pub use crate::fx::{FloatingTextLayer, ParticleSystem, ScreenFade, ScreenShake};
+    pub use crate::math::{approach, clamp01, inv_lerp, lerp, pulse01, pulse_range, smoothstep};
+    pub use crate::timing::{Cooldown, IntervalTimer, Timeline, Timer};
 
     // Assets and rendering
     pub use crate::assets::{AssetManager, AssetPack};
