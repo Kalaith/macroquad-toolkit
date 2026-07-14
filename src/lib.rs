@@ -39,6 +39,7 @@
 //! - [`db`] - Database support (optional, requires `db` feature)
 
 // Core 2D modules (existing)
+pub mod achievements;
 pub mod assets;
 pub mod audio;
 pub mod camera;
