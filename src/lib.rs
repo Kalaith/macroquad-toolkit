@@ -49,6 +49,7 @@ pub mod fx;
 pub mod input;
 pub mod math;
 pub mod rng;
+pub mod settings;
 pub mod sprite;
 pub mod states;
 pub mod timing;
