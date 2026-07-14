@@ -91,10 +91,7 @@ impl Default for NotificationRenderConfig {
     }
 }
 
-fn with_alpha(mut color: Color, alpha: f32) -> Color {
-    color.a *= alpha;
-    color
-}
+use crate::colors::multiply_alpha as with_alpha;
 
 /// A single notification message
 #[derive(Debug, Clone, Serialize, Deserialize)]
