@@ -260,6 +260,30 @@ pub fn format_compact_money(value: i64) -> String {
     }
 }
 
+/// Format elapsed seconds as `MM:SS` (e.g. `07:42`). Minutes keep growing
+/// past an hour (`75:03`).
+pub fn format_mmss(total_seconds: f32) -> String {
+    let total = total_seconds.max(0.0) as u64;
+    format!("{:02}:{:02}", total / 60, total % 60)
+}
+
+/// Format elapsed seconds as `H:MM:SS` once an hour is reached, otherwise
+/// `MM:SS`.
+pub fn format_hmmss(total_seconds: f32) -> String {
+    let total = total_seconds.max(0.0) as u64;
+    let hours = total / 3600;
+    if hours > 0 {
+        format!("{}:{:02}:{:02}", hours, (total % 3600) / 60, total % 60)
+    } else {
+        format_mmss(total_seconds)
+    }
+}
+
+/// Format an in-game clock as `HH:MM` (e.g. `08:30`). Hours wrap at 24.
+pub fn format_clock(hour: u32, minute: u32) -> String {
+    format!("{:02}:{:02}", hour % 24, minute % 60)
+}
+
 /// Capitalize the first character of a string
 pub fn capitalize(s: &str) -> String {
     let mut chars = s.chars().collect::<Vec<_>>();
@@ -605,5 +629,21 @@ mod tests {
         assert_eq!(format_compact_money(999), "$999");
         assert_eq!(format_compact_money(12_000), "$12k");
         assert_eq!(format_compact_money(1_240_000), "$1.2m");
+    }
+
+    #[test]
+    fn formats_durations() {
+        assert_eq!(format_mmss(0.0), "00:00");
+        assert_eq!(format_mmss(462.9), "07:42");
+        assert_eq!(format_mmss(4503.0), "75:03");
+        assert_eq!(format_mmss(-5.0), "00:00");
+        assert_eq!(format_hmmss(462.9), "07:42");
+        assert_eq!(format_hmmss(4503.0), "1:15:03");
+    }
+
+    #[test]
+    fn formats_clock() {
+        assert_eq!(format_clock(8, 30), "08:30");
+        assert_eq!(format_clock(25, 61), "01:01");
     }
 }
