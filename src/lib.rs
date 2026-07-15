@@ -92,7 +92,9 @@ pub mod prelude {
     pub use crate::ui::*;
 
     // Effects and timing
-    pub use crate::fx::{FloatingTextLayer, ParticleSystem, ScreenFade, ScreenShake};
+    pub use crate::fx::{
+        FloatingTextLayer, ParticleSystem, ProjectileLayer, ScreenFade, ScreenShake,
+    };
     pub use crate::math::{approach, clamp01, inv_lerp, lerp, pulse01, pulse_range, smoothstep};
     pub use crate::timing::{Cooldown, IntervalTimer, Timeline, Timer};
 
