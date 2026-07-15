@@ -1,5 +1,9 @@
 //! Sprite utilities for rendering textures with transformations
 
+mod variation;
+
+pub use variation::*;
+
 use macroquad::prelude::*;
 
 /// Sprite struct for robust scaling, rotation, and tinting of textures
