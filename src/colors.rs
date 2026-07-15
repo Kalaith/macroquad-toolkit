@@ -28,6 +28,20 @@ pub fn darken(color: Color, amount: f32) -> Color {
     lighten(color, -amount)
 }
 
+/// Blends the color toward black by `amount` (`0.0` = unchanged, `1.0` = black).
+/// Multiplicative shading — unlike [`darken`], which subtracts a fixed amount
+/// per channel. Alpha is preserved.
+pub fn shade(color: Color, amount: f32) -> Color {
+    mix(color, Color::new(0.0, 0.0, 0.0, color.a), amount)
+}
+
+/// Blends the color toward white by `amount` (`0.0` = unchanged, `1.0` = white).
+/// Multiplicative tinting — unlike [`lighten`], which adds a fixed amount per
+/// channel. Alpha is preserved.
+pub fn tint(color: Color, amount: f32) -> Color {
+    mix(color, Color::new(1.0, 1.0, 1.0, color.a), amount)
+}
+
 /// Multiplies each RGB channel by `factor` (clamped to `[0, 1]`). Alpha is preserved.
 pub fn scale_rgb(color: Color, factor: f32) -> Color {
     Color::new(
@@ -165,6 +179,19 @@ mod tests {
         let d = darken(Color::new(0.1, 0.5, 0.9, 0.8), 0.2);
         assert_close(d.r, 0.0);
         assert_close(d.g, 0.3);
+    }
+
+    #[test]
+    fn shade_and_tint_blend_multiplicatively() {
+        let c = Color::new(0.8, 0.4, 0.2, 0.7);
+        let shaded = shade(c, 0.5);
+        assert_close(shaded.r, 0.4);
+        assert_close(shaded.g, 0.2);
+        assert_close(shaded.a, 0.7);
+        let tinted = tint(c, 0.5);
+        assert_close(tinted.r, 0.9);
+        assert_close(tinted.b, 0.6);
+        assert_close(tinted.a, 0.7);
     }
 
     #[test]

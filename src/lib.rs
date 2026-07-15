@@ -37,6 +37,7 @@
 //! - [`persistence`] - Save/load system (native + WASM)
 //! - [`data_loader`] - JSON data loading patterns
 //! - [`assets`] - Asset management and texture loading
+//! - [`raster`] - CPU-side pixel drawing onto images for procedural art
 //!
 //! ## Other
 //! - [`audio`] - Audio playback utilities
@@ -56,6 +57,7 @@ pub mod events;
 pub mod fx;
 pub mod input;
 pub mod math;
+pub mod raster;
 pub mod rng;
 pub mod settings;
 pub mod sprite;
@@ -83,7 +85,9 @@ pub mod wasm_storage;
 /// Convenient re-exports for common 2D game development usage
 pub mod prelude {
     // Input and UI
-    pub use crate::colors::{dark, darken, lerp_color, lighten, mix, multiply_alpha, with_alpha};
+    pub use crate::colors::{
+        dark, darken, lerp_color, lighten, mix, multiply_alpha, shade, tint, with_alpha,
+    };
     pub use crate::input::*;
     pub use crate::ui::*;
 
