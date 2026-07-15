@@ -207,9 +207,155 @@ impl InputState {
     }
 }
 
+/// Wrap-around selection cursor for keyboard-driven menus (pause menus,
+/// settings lists). Pure state — feed it navigation deltas from any key
+/// scheme, or use [`menu_nav_vertical`] / [`menu_nav_horizontal`] for the
+/// standard arrows + WASD bindings.
+///
+/// Extracted from scrapyard's pause-menu input handling.
+///
+/// ```
+/// use macroquad_toolkit::input::MenuCursor;
+///
+/// let mut cursor = MenuCursor::new(3);
+/// cursor.select_prev(); // wraps to the last option
+/// assert_eq!(cursor.index(), 2);
+/// cursor.select_next();
+/// assert_eq!(cursor.index(), 0);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MenuCursor {
+    index: usize,
+    len: usize,
+}
+
+impl MenuCursor {
+    /// A cursor over `len` options, starting at the first.
+    pub fn new(len: usize) -> Self {
+        Self { index: 0, len }
+    }
+
+    /// Currently selected option index.
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Number of options.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// True when the menu has no options.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Jumps to an option (clamped into range), e.g. when the mouse hovers it.
+    pub fn set_index(&mut self, index: usize) {
+        self.index = index.min(self.len.saturating_sub(1));
+    }
+
+    /// Changes the option count, clamping the selection into range.
+    pub fn set_len(&mut self, len: usize) {
+        self.len = len;
+        self.index = self.index.min(len.saturating_sub(1));
+    }
+
+    /// Moves the selection up, wrapping from the first option to the last.
+    pub fn select_prev(&mut self) {
+        if self.len == 0 {
+            return;
+        }
+        self.index = if self.index == 0 {
+            self.len - 1
+        } else {
+            self.index - 1
+        };
+    }
+
+    /// Moves the selection down, wrapping from the last option to the first.
+    pub fn select_next(&mut self) {
+        if self.len == 0 {
+            return;
+        }
+        self.index = (self.index + 1) % self.len;
+    }
+
+    /// Applies a navigation delta (`-1` up, `+1` down, `0` none) such as the
+    /// result of [`menu_nav_vertical`]. Returns true when the selection moved.
+    pub fn navigate(&mut self, delta: i32) -> bool {
+        if delta == 0 || self.len == 0 {
+            return false;
+        }
+        if delta < 0 {
+            self.select_prev();
+        } else {
+            self.select_next();
+        }
+        true
+    }
+}
+
+/// Reads the standard vertical menu keys this frame: `-1` for Up/W, `+1`
+/// for Down/S, `0` otherwise.
+pub fn menu_nav_vertical() -> i32 {
+    let up = is_key_pressed(KeyCode::Up) || is_key_pressed(KeyCode::W);
+    let down = is_key_pressed(KeyCode::Down) || is_key_pressed(KeyCode::S);
+    (down as i32) - (up as i32)
+}
+
+/// Reads the standard horizontal adjust keys this frame: `-1` for Left/A,
+/// `+1` for Right/D, `0` otherwise. Multiply by a step for slider-style
+/// settings rows (`volume += menu_nav_horizontal() as f32 * 0.1`).
+pub fn menu_nav_horizontal() -> i32 {
+    let left = is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::A);
+    let right = is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::D);
+    (right as i32) - (left as i32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_cursor_wraps_both_directions() {
+        let mut cursor = MenuCursor::new(3);
+        cursor.select_prev();
+        assert_eq!(cursor.index(), 2);
+        cursor.select_next();
+        assert_eq!(cursor.index(), 0);
+        cursor.select_next();
+        assert_eq!(cursor.index(), 1);
+    }
+
+    #[test]
+    fn menu_cursor_navigate_reports_movement() {
+        let mut cursor = MenuCursor::new(2);
+        assert!(!cursor.navigate(0));
+        assert!(cursor.navigate(1));
+        assert_eq!(cursor.index(), 1);
+        assert!(cursor.navigate(-1));
+        assert_eq!(cursor.index(), 0);
+    }
+
+    #[test]
+    fn menu_cursor_clamps_on_resize_and_set() {
+        let mut cursor = MenuCursor::new(5);
+        cursor.set_index(4);
+        cursor.set_len(3);
+        assert_eq!(cursor.index(), 2);
+        cursor.set_index(99);
+        assert_eq!(cursor.index(), 2);
+    }
+
+    #[test]
+    fn empty_menu_cursor_is_inert() {
+        let mut cursor = MenuCursor::new(0);
+        assert!(cursor.is_empty());
+        assert!(!cursor.navigate(1));
+        cursor.select_prev();
+        assert_eq!(cursor.index(), 0);
+    }
 
     #[test]
     fn hit_test_returns_first_matching_target() {
