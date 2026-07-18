@@ -44,6 +44,10 @@ pub struct GameSettings {
     /// Multiplier fed to the toolkit UI text scaling on
     /// [`apply_display`](Self::apply_display).
     pub ui_text_scale: f32,
+    /// Autosave cadence in seconds. Games that autosave on a timer read this
+    /// instead of a hardcoded/config interval so players can tune it; clamped
+    /// to `[5, 600]` by [`sanitize`](Self::sanitize).
+    pub autosave_interval: f32,
 }
 
 impl Default for GameSettings {
@@ -56,6 +60,7 @@ impl Default for GameSettings {
             show_fps: false,
             screen_shake: true,
             ui_text_scale: 1.0,
+            autosave_interval: 30.0,
         }
     }
 }
@@ -103,6 +108,7 @@ impl GameSettings {
         self.sfx_volume = self.sfx_volume.clamp(0.0, 1.0);
         self.music_volume = self.music_volume.clamp(0.0, 1.0);
         self.ui_text_scale = self.ui_text_scale.clamp(0.25, 4.0);
+        self.autosave_interval = self.autosave_interval.clamp(5.0, 600.0);
     }
 }
 
@@ -128,6 +134,25 @@ mod tests {
         assert!(settings.fullscreen);
         assert!((settings.master_volume - 1.0).abs() < 1e-6);
         assert!(settings.screen_shake);
+    }
+
+    #[test]
+    fn autosave_interval_defaults_and_clamps() {
+        assert!((GameSettings::default().autosave_interval - 30.0).abs() < 1e-6);
+
+        let mut too_fast = GameSettings {
+            autosave_interval: 1.0,
+            ..Default::default()
+        };
+        too_fast.sanitize();
+        assert!((too_fast.autosave_interval - 5.0).abs() < 1e-6);
+
+        let mut too_slow = GameSettings {
+            autosave_interval: 9_999.0,
+            ..Default::default()
+        };
+        too_slow.sanitize();
+        assert!((too_slow.autosave_interval - 600.0).abs() < 1e-6);
     }
 
     #[test]
