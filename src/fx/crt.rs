@@ -1,9 +1,9 @@
 //! CRT / phosphor-monitor post-processing overlay.
 //!
-//! Draws four cheap, shader-free layers in *screen space* to make a flat 2D
+//! Draws several cheap, shader-free layers in *screen space* to make a flat 2D
 //! render read like an old cathode-ray terminal: horizontal scanlines, a
-//! corner vignette (screen curvature falloff), a slow rolling refresh band,
-//! and a subtle whole-screen flicker.
+//! corner vignette (screen curvature falloff), a slow rolling refresh band, a
+//! subtle whole-screen flicker, and rounded tube-glass corners.
 //!
 //! Call [`CrtOverlay::draw`] as the very last step of a frame, after all
 //! world/UI rendering and after `end_virtual_ui_frame`, so it sits on top of
@@ -36,6 +36,10 @@ pub struct CrtStyle {
     pub flicker_alpha: f32,
     /// Phosphor tint used for the refresh band and flicker (alpha ignored).
     pub tint: Color,
+    /// Radius, in screen pixels, of the rounded tube-glass corners (0 = square).
+    pub corner_radius: f32,
+    /// Fill for the masked-off corners — the dark bezel around the glass.
+    pub bezel: Color,
 }
 
 impl Default for CrtStyle {
@@ -55,6 +59,8 @@ impl CrtStyle {
             scan_band_speed: 0.18,
             flicker_alpha: 0.025,
             tint: Color::new(1.0, 0.72, 0.20, 1.0),
+            corner_radius: 26.0,
+            bezel: Color::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 
@@ -67,10 +73,12 @@ impl CrtStyle {
     }
 }
 
-/// Draws the CRT overlay, caching the baked vignette texture between frames.
+/// Draws the CRT overlay, caching the baked vignette and corner textures
+/// between frames.
 #[derive(Default)]
 pub struct CrtOverlay {
     vignette: Option<Texture2D>,
+    corner: Option<Texture2D>,
 }
 
 impl CrtOverlay {
@@ -134,6 +142,31 @@ impl CrtOverlay {
             let a = style.flicker_alpha * flicker_factor(time);
             draw_rectangle(0.0, 0.0, w, h, with_alpha(style.tint, a));
         }
+
+        // Rounded tube-glass corners, drawn last so the bezel clips every layer.
+        if style.corner_radius > 0.0 {
+            let tex = self.corner.get_or_insert_with(build_corner_mask);
+            let r = style.corner_radius.min(w.min(h) * 0.5);
+            for (fx, fy, px, py) in [
+                (false, false, 0.0, 0.0),
+                (true, false, w - r, 0.0),
+                (false, true, 0.0, h - r),
+                (true, true, w - r, h - r),
+            ] {
+                draw_texture_ex(
+                    tex,
+                    px,
+                    py,
+                    style.bezel,
+                    DrawTextureParams {
+                        dest_size: Some(vec2(r, r)),
+                        flip_x: fx,
+                        flip_y: fy,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
     }
 }
 
@@ -149,6 +182,28 @@ fn flicker_factor(time: f32) -> f32 {
 fn scan_band_y(time: f32, height: f32, speed: f32, band_h: f32) -> f32 {
     let span = height + band_h;
     (time * speed * height).rem_euclid(span) - band_h
+}
+
+/// Bakes a top-left corner mask: opaque (alpha 1) outside a quarter-circle of
+/// glass, transparent inside, with an antialiased edge. Flipped per corner and
+/// multiplied by the bezel color, it rounds the screen like a CRT tube face.
+fn build_corner_mask() -> Texture2D {
+    const N: u16 = 64;
+    let r = N as f32;
+    let mut image = Image::gen_image_color(N, N, Color::new(0.0, 0.0, 0.0, 0.0));
+    for y in 0..N {
+        for x in 0..N {
+            // Distance to the inner corner (the glass centre side of this tile).
+            let dx = r - x as f32;
+            let dy = r - y as f32;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let alpha = smoothstep(r - 1.5, r + 0.5, dist);
+            image.set_pixel(x as u32, y as u32, Color::new(1.0, 1.0, 1.0, alpha));
+        }
+    }
+    let tex = Texture2D::from_image(&image);
+    tex.set_filter(FilterMode::Linear);
+    tex
 }
 
 /// Bakes a small radial vignette: white with alpha rising from 0 at the centre
@@ -198,6 +253,7 @@ mod tests {
         for style in [CrtStyle::amber(), CrtStyle::green()] {
             assert!(style.scanline_alpha > 0.0);
             assert!(style.vignette_alpha > 0.0);
+            assert!(style.corner_radius > 0.0);
         }
     }
 }
