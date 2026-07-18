@@ -613,6 +613,46 @@ pub fn draw_text_shadow(
     draw_text_ex(text, x, y, style.params());
 }
 
+/// Eight compass offsets used to build a symmetric text halo.
+const GLOW_DIRS: [(f32, f32); 8] = [
+    (1.0, 0.0),
+    (-1.0, 0.0),
+    (0.0, 1.0),
+    (0.0, -1.0),
+    (0.7, 0.7),
+    (-0.7, 0.7),
+    (0.7, -0.7),
+    (-0.7, -0.7),
+];
+
+/// Draw `text` with a soft phosphor bloom: several dim, offset copies of the
+/// text (in `style.color` at `glow_alpha`) fanned out to `glow_radius`, with a
+/// crisp foreground copy on top. A cheap CRT-style halo for bright headings —
+/// keep `glow_alpha` low and reserve it for large text so body copy stays
+/// legible.
+pub fn draw_text_glow(
+    text: &str,
+    x: f32,
+    y: f32,
+    style: TextStyle<'_>,
+    glow_alpha: f32,
+    glow_radius: f32,
+) {
+    let glow = TextStyle {
+        color: Color {
+            a: glow_alpha,
+            ..style.color
+        },
+        ..style
+    };
+    for radius in [glow_radius, glow_radius * 0.5] {
+        for (dx, dy) in GLOW_DIRS {
+            draw_text_ex(text, x + dx * radius, y + dy * radius, glow.params());
+        }
+    }
+    draw_text_ex(text, x, y, style.params());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
