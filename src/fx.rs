@@ -11,6 +11,7 @@ mod floating_text;
 mod particles;
 mod shake;
 mod travel;
+mod typewriter;
 
 pub use crt::*;
 pub use fade::*;
@@ -18,3 +19,4 @@ pub use floating_text::*;
 pub use particles::*;
 pub use shake::*;
 pub use travel::*;
+pub use typewriter::*;
