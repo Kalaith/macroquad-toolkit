@@ -1,3 +1,6 @@
+//! UI layout primitives: `UiRect`, virtual (logical-resolution) UI scaling,
+//! grid placement, and scroll handling.
+
 use crate::input::*;
 use macroquad::prelude::*;
 

@@ -1,3 +1,6 @@
+//! UI font loading, text measurement/layout/drawing, and value formatting
+//! (money, idle-magnitude amounts/rates, clocks, and string case helpers).
+
 use crate::colors::dark;
 use macroquad::prelude::*;
 use std::cell::RefCell;

@@ -1,3 +1,6 @@
+//! Button widgets: styles, tones, and press/release trigger variants over
+//! plain rects or `UiRect`, with enabled/disabled and explicit-mouse forms.
+
 use crate::colors::dark;
 use crate::input::*;
 use macroquad::prelude::*;

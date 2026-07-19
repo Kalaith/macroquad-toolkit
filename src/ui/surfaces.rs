@@ -1,3 +1,6 @@
+//! Rectangular UI surfaces: styled panels with borders, shadows, and headers,
+//! plus ragged, brush-stroke, and chamfered decorative variants.
+
 use crate::colors::dark;
 use macroquad::prelude::*;
 
