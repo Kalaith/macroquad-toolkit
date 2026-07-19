@@ -260,6 +260,62 @@ pub fn format_compact_money(value: i64) -> String {
     }
 }
 
+/// Magnitude suffixes for [`format_amount`] / [`format_rate`], each step a
+/// thousandfold: K (1e3), M (1e6), B (1e9), T (1e12), then Qa/Qi/Sx/Sp/Oc/No
+/// up to 1e30. Values beyond the table fall back to scientific notation.
+const AMOUNT_SUFFIXES: [&str; 11] = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"];
+
+/// Formats a large `f64` quantity with idle/incremental-genre magnitude
+/// suffixes: integers below 1000, two decimals with a suffix up to `No`
+/// (1e30), scientific notation beyond. Handles negatives, and degrades
+/// `NaN`/infinity to `∞` rather than printing junk.
+///
+/// Unlike [`format_compact_money`], which takes an `i64` and saturates around
+/// 9.2e18, this covers the full `f64` range that idle games routinely reach.
+///
+/// ```
+/// # use macroquad_toolkit::ui::format_amount;
+/// assert_eq!(format_amount(999.0), "999");
+/// assert_eq!(format_amount(1_500.0), "1.50K");
+/// assert_eq!(format_amount(2_340_000.0), "2.34M");
+/// assert_eq!(format_amount(1e30), "1.00No");
+/// ```
+pub fn format_amount(value: f64) -> String {
+    if !value.is_finite() {
+        return "∞".to_owned();
+    }
+    if value < 0.0 {
+        return format!("-{}", format_amount(-value));
+    }
+    if value < 1000.0 {
+        return format!("{}", value.floor() as i64);
+    }
+
+    let tier = (value.log10() / 3.0).floor() as usize;
+    if tier < AMOUNT_SUFFIXES.len() {
+        let scaled = value / 1000f64.powi(tier as i32);
+        format!("{:.2}{}", scaled, AMOUNT_SUFFIXES[tier])
+    } else {
+        format!("{:.2e}", value)
+    }
+}
+
+/// Formats a per-second rate: one decimal below 1000, then the same magnitude
+/// suffixes as [`format_amount`].
+///
+/// ```
+/// # use macroquad_toolkit::ui::format_rate;
+/// assert_eq!(format_rate(2.5), "2.5");
+/// assert_eq!(format_rate(12_500.0), "12.50K");
+/// ```
+pub fn format_rate(value: f64) -> String {
+    if value < 1000.0 {
+        format!("{:.1}", value)
+    } else {
+        format_amount(value)
+    }
+}
+
 /// Format elapsed seconds as `MM:SS` (e.g. `07:42`). Minutes keep growing
 /// past an hour (`75:03`).
 pub fn format_mmss(total_seconds: f32) -> String {
@@ -669,6 +725,35 @@ mod tests {
         assert_eq!(format_compact_money(999), "$999");
         assert_eq!(format_compact_money(12_000), "$12k");
         assert_eq!(format_compact_money(1_240_000), "$1.2m");
+    }
+
+    #[test]
+    fn formats_amount_across_tiers() {
+        assert_eq!(format_amount(0.0), "0");
+        assert_eq!(format_amount(999.0), "999");
+        assert_eq!(format_amount(1_500.0), "1.50K");
+        assert_eq!(format_amount(2_340_000.0), "2.34M");
+        assert_eq!(format_amount(1e9), "1.00B");
+        assert_eq!(format_amount(1e12), "1.00T");
+        assert_eq!(format_amount(1e30), "1.00No");
+        assert_eq!(format_amount(-1_500.0), "-1.50K");
+    }
+
+    #[test]
+    fn amount_falls_back_to_scientific_and_survives_extremes() {
+        assert_eq!(format_amount(1e36), "1.00e36");
+        assert_eq!(format_amount(1e300), "1.00e300");
+        // f64::MAX (~1.8e308) is still finite and formats.
+        assert!(format_amount(f64::MAX).contains("e308"));
+        // Non-finite inputs degrade gracefully rather than printing junk.
+        assert_eq!(format_amount(f64::INFINITY), "∞");
+        assert_eq!(format_amount(f64::NAN), "∞");
+    }
+
+    #[test]
+    fn formats_rate_with_one_decimal_then_suffixes() {
+        assert_eq!(format_rate(2.5), "2.5");
+        assert_eq!(format_rate(12_500.0), "12.50K");
     }
 
     #[test]

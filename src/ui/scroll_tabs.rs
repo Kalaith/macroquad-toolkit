@@ -128,6 +128,22 @@ impl ScrollArea {
     }
 }
 
+/// True when `item` sits fully within `view` (a small epsilon absorbs
+/// rounding). macroquad has no scissor rect, so a [`ScrollArea`] can't clip
+/// its rows — cull the partially-scrolled cards at the top and bottom with
+/// this so panel edges stay clean.
+///
+/// ```
+/// # use macroquad::prelude::Rect;
+/// # use macroquad_toolkit::ui::is_fully_visible;
+/// let view = Rect::new(0.0, 0.0, 100.0, 100.0);
+/// assert!(is_fully_visible(Rect::new(0.0, 10.0, 100.0, 40.0), view));
+/// assert!(!is_fully_visible(Rect::new(0.0, 80.0, 100.0, 40.0), view));
+/// ```
+pub fn is_fully_visible(item: Rect, view: Rect) -> bool {
+    item.y >= view.y - 0.5 && item.bottom() <= view.bottom() + 0.5
+}
+
 /// Orientation for [`tab_bar_ex`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TabOrientation {

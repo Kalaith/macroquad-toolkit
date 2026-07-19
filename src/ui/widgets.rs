@@ -592,6 +592,21 @@ pub fn draw_badge(rect: Rect, label: &str, fill: Color, text_color: Color) {
 pub fn meter(rect: Rect, value: f32, max: f32, fill: Color, label: Option<&str>) {
     progress_bar(rect.x, rect.y, rect.w, rect.h, value, max, fill);
     if let Some(label) = label {
+        // A full/bright fill (e.g. a green bar at 100%) leaves light text almost
+        // unreadable, so stroke the label with a dark outline first — it keeps
+        // contrast over both the bright fill and the dark empty track.
+        let outline = Color::new(0.0, 0.0, 0.0, 0.75);
+        for (dx, dy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+            draw_text_centered_in_box(
+                label,
+                rect.x + 4.0 + dx,
+                rect.y + dy,
+                rect.w - 8.0,
+                rect.h,
+                14.0,
+                outline,
+            );
+        }
         draw_text_centered_in_box(
             label,
             rect.x + 4.0,

@@ -86,7 +86,7 @@ pub mod wasm_storage;
 pub mod prelude {
     // Input and UI
     pub use crate::colors::{
-        dark, darken, lerp_color, lighten, mix, multiply_alpha, shade, tint, with_alpha,
+        dark, darken, lerp_color, lighten, mix, multiply_alpha, scale_rgb, shade, tint, with_alpha,
     };
     pub use crate::input::*;
     pub use crate::ui::*;
