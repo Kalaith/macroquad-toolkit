@@ -166,7 +166,56 @@ pub fn button_rect_enabled_styled_ex(
     text_style: TextStyle<'_>,
     trigger: ButtonTrigger,
 ) -> bool {
-    let hovered = enabled && rect.contains_mouse();
+    button_rect_enabled_styled_ex_at(
+        rect,
+        text,
+        enabled,
+        style,
+        text_style,
+        trigger,
+        Vec2::from(mouse_position()),
+    )
+}
+
+/// Mouse-aware variant of [`button_rect_tone`]: hit-tests against an explicit
+/// logical `mouse` position. Use this inside a [`VirtualUi`](crate::ui::VirtualUi)
+/// frame, where the raw screen mouse is in physical pixels and would miss the
+/// letterboxed layout.
+pub fn button_rect_tone_at(
+    rect: Rect,
+    text: &str,
+    enabled: bool,
+    tone: ButtonTone,
+    mouse: Vec2,
+) -> bool {
+    let style = ButtonStyle::from_tone(tone);
+    button_rect_enabled_styled_ex_at(
+        rect,
+        text,
+        enabled,
+        &style,
+        TextStyle::new(20.0, style.text_color),
+        ButtonTrigger::Release,
+        mouse,
+    )
+}
+
+/// Like [`button_rect_enabled_styled_ex`], but hit-tests against an explicit
+/// logical `mouse` position instead of the raw screen mouse. This is the
+/// [`VirtualUi`](crate::ui::VirtualUi)-safe form; `plaque_button` follows the
+/// same convention. The plain `_ex` renderer delegates here with the screen
+/// mouse.
+#[allow(clippy::too_many_arguments)]
+pub fn button_rect_enabled_styled_ex_at(
+    rect: Rect,
+    text: &str,
+    enabled: bool,
+    style: &ButtonStyle,
+    text_style: TextStyle<'_>,
+    trigger: ButtonTrigger,
+    mouse: Vec2,
+) -> bool {
+    let hovered = enabled && rect.contains_point(mouse);
     let is_pressed = hovered && is_mouse_button_down(MouseButton::Left);
     let activated = match trigger {
         ButtonTrigger::Press => hovered && is_mouse_button_pressed(MouseButton::Left),

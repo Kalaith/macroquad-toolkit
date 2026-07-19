@@ -9,6 +9,7 @@ use macroquad::prelude::*;
 use crate::colors::{dark, with_alpha};
 use crate::input::{is_hovered_rect, was_clicked_rect};
 use crate::ui::font::draw_text_centered_in_box;
+use crate::ui::{draw_surface, draw_text_centered_in_box_ex, RectExt, SurfaceStyle, TextStyle};
 
 /// Persistent scroll state for a list/panel region: wheel scrolling while
 /// hovered, a proportional draggable scrollbar, and offset clamping.
@@ -209,6 +210,120 @@ pub fn tab_bar_ex(
         );
 
         if was_clicked_rect(tab) {
+            clicked = Some(index);
+        }
+    }
+
+    clicked
+}
+
+/// Visual styling for [`tab_bar_styled_at`]. The [`Default`] matches the common
+/// dark chrome (blue-tinted active fill, bordered tabs, an accent bar on the
+/// active tab) so most callers only need `TabStyle::default()`.
+#[derive(Debug, Clone, Copy)]
+pub struct TabStyle {
+    pub active_fill: Color,
+    pub hover_fill: Color,
+    pub inactive_fill: Color,
+    /// Tab border `(width, color)`, or `None` for borderless tabs.
+    pub border: Option<(f32, Color)>,
+    /// Accent bar on the active tab `(thickness, color)`: a top highlight for
+    /// horizontal bars, a left accent for vertical nav columns.
+    pub active_accent: Option<(f32, Color)>,
+    pub text_size: f32,
+    pub active_text: Color,
+    pub inactive_text: Color,
+    /// Horizontal padding reserved on each side of the label.
+    pub text_pad: f32,
+}
+
+impl Default for TabStyle {
+    fn default() -> Self {
+        Self {
+            active_fill: Color::new(0.16, 0.22, 0.32, 1.0),
+            hover_fill: Color::new(0.12, 0.14, 0.18, 1.0),
+            inactive_fill: Color::new(0.08, 0.09, 0.12, 1.0),
+            border: Some((1.0, Color::new(0.3, 0.36, 0.46, 0.5))),
+            active_accent: Some((3.0, dark::ACCENT)),
+            text_size: 17.0,
+            active_text: dark::TEXT_BRIGHT,
+            inactive_text: dark::TEXT_DIM,
+            text_pad: 4.0,
+        }
+    }
+}
+
+/// Mouse-aware, fully styled one-of-N tab/nav bar. Unlike [`tab_bar`], it
+/// hit-tests against an explicit logical `mouse` position — so it works inside a
+/// [`VirtualUi`](crate::ui::VirtualUi) frame — and takes a [`TabStyle`] so games
+/// can match their own chrome. Returns the index clicked this frame, if any.
+pub fn tab_bar_styled_at(
+    rect: Rect,
+    labels: &[&str],
+    active: usize,
+    orientation: TabOrientation,
+    style: &TabStyle,
+    mouse: Vec2,
+) -> Option<usize> {
+    if labels.is_empty() {
+        return None;
+    }
+    let count = labels.len() as f32;
+    let mut clicked = None;
+
+    for (index, label) in labels.iter().enumerate() {
+        let tab = match orientation {
+            TabOrientation::Horizontal => {
+                let w = rect.w / count;
+                Rect::new(rect.x + index as f32 * w, rect.y, w, rect.h)
+            }
+            TabOrientation::Vertical => {
+                let h = rect.h / count;
+                Rect::new(rect.x, rect.y + index as f32 * h, rect.w, h)
+            }
+        };
+
+        let is_active = index == active;
+        let hovered = tab.contains_point(mouse);
+        let fill = if is_active {
+            style.active_fill
+        } else if hovered {
+            style.hover_fill
+        } else {
+            style.inactive_fill
+        };
+
+        let mut surface = SurfaceStyle::new(fill);
+        if let Some((width, color)) = style.border {
+            surface = surface.with_border(width, color);
+        }
+        if is_active {
+            if let Some((thickness, color)) = style.active_accent {
+                surface = match orientation {
+                    TabOrientation::Horizontal => surface.with_top_highlight(thickness, color),
+                    TabOrientation::Vertical => surface.with_left_accent(thickness, color),
+                };
+            }
+        }
+        draw_surface(tab, &surface);
+
+        draw_text_centered_in_box_ex(
+            label,
+            tab.x + style.text_pad,
+            tab.y,
+            tab.w - style.text_pad * 2.0,
+            tab.h,
+            TextStyle::new(
+                style.text_size,
+                if is_active {
+                    style.active_text
+                } else {
+                    style.inactive_text
+                },
+            ),
+        );
+
+        if hovered && is_mouse_button_released(MouseButton::Left) {
             clicked = Some(index);
         }
     }
