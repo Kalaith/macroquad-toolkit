@@ -93,10 +93,13 @@ pub mod prelude {
 
     // Effects and timing
     pub use crate::fx::{
-        is_fully_typed, typed_char_count, typed_prefix, CrtOverlay, CrtStyle, FloatingTextLayer,
-        ParticleSystem, ProjectileLayer, ScreenFade, ScreenShake,
+        is_fully_typed, prefix_chars, reveal_block, typed_char_count, typed_prefix, BlockReveal,
+        CrtOverlay, CrtStyle, FloatingTextLayer, ParticleSystem, ProjectileLayer, ScreenFade,
+        ScreenShake,
     };
-    pub use crate::math::{approach, clamp01, inv_lerp, lerp, pulse01, pulse_range, smoothstep};
+    pub use crate::math::{
+        approach, blink, clamp01, inv_lerp, lerp, pulse01, pulse_range, smoothstep,
+    };
     pub use crate::timing::{Cooldown, IntervalTimer, Timeline, Timer};
 
     // Assets and rendering

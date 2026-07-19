@@ -117,6 +117,13 @@ pub fn bob(speed: f32, amplitude: f32) -> f32 {
     (get_time() as f32 * speed).sin() * amplitude
 }
 
+/// Square-wave blink: `true` for the first half of each cycle, `false` for the
+/// second. `t` is elapsed seconds and `hz` is blinks per second. Replaces the
+/// `(t * k).fract() < 0.5` cursor/caret idiom; robust for any finite `t`.
+pub fn blink(t: f32, hz: f32) -> bool {
+    (t * hz).rem_euclid(1.0) < 0.5
+}
+
 /// FNV-1a hash of a string. Useful for deriving stable procedural seeds from ids.
 pub fn hash_str(s: &str) -> u32 {
     let mut hash: u32 = 2166136261;
@@ -249,6 +256,18 @@ mod tests {
             let v = pulse01_at(i as f64 * 0.1, 3.0);
             assert!((0.0..=1.0).contains(&v));
         }
+    }
+
+    #[test]
+    fn blink_toggles_each_half_cycle() {
+        // 1 Hz: on for the first half-second, off for the second.
+        assert!(blink(0.0, 1.0));
+        assert!(blink(0.25, 1.0));
+        assert!(!blink(0.5, 1.0));
+        assert!(!blink(0.75, 1.0));
+        assert!(blink(1.0, 1.0)); // next cycle
+                                  // Robust for negative elapsed (rem_euclid, not fract).
+        assert!(!blink(-0.25, 1.0));
     }
 
     #[test]
