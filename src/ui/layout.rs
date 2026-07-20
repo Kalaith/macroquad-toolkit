@@ -152,12 +152,30 @@ impl VirtualUi {
         }
     }
 
+    /// The letterbox rect in **physical framebuffer pixels**, ready for
+    /// `Camera2D::viewport` (which macroquad forwards straight to `glViewport`).
+    ///
+    /// `screen_width()`/`screen_height()` and `mouse_position()` are *logical*
+    /// (macroquad divides them by the DPI scale), so `offset`/`scale` above are
+    /// logical too. `glViewport` however takes physical pixels. On a display
+    /// with `devicePixelRatio == 1` the two are identical, but on a scaled
+    /// display (125%/150%/160% — most laptops and tablets) a logical viewport
+    /// covers only `1/dpi` of the framebuffer, so the UI renders shrunk into the
+    /// bottom-left corner while hit-testing still spans the whole window. Scale
+    /// back up to physical here, and only here, so all the mouse math stays
+    /// logical.
     pub fn viewport(&self) -> (i32, i32, i32, i32) {
+        self.viewport_for_dpi(screen_dpi_scale())
+    }
+
+    /// [`Self::viewport`] with the DPI scale injected, so the conversion can be
+    /// tested without a live macroquad context.
+    pub fn viewport_for_dpi(&self, dpi: f32) -> (i32, i32, i32, i32) {
         (
-            self.offset.x.round() as i32,
-            self.offset.y.round() as i32,
-            (self.logical_width * self.scale).round() as i32,
-            (self.logical_height * self.scale).round() as i32,
+            (self.offset.x * dpi).round() as i32,
+            (self.offset.y * dpi).round() as i32,
+            (self.logical_width * self.scale * dpi).round() as i32,
+            (self.logical_height * self.scale * dpi).round() as i32,
         )
     }
 
@@ -212,6 +230,23 @@ pub fn end_virtual_ui_frame() {
 /// Convert current mouse position into a fixed logical UI resolution.
 pub fn virtual_mouse_position(logical_width: f32, logical_height: f32) -> Vec2 {
     VirtualUi::new(logical_width, logical_height).mouse_position()
+}
+
+/// Convert a rect in logical screen coordinates (the space `screen_width()` and
+/// `mouse_position()` report) into the physical framebuffer pixels that the
+/// `viewport` field of `Camera2D`/`Camera3D` expects.
+///
+/// Use this for any hand-built `viewport: Some(..)`; passing logical pixels
+/// straight through renders shrunk into the bottom-left corner on displays with
+/// a `devicePixelRatio` above 1. See [`VirtualUi::viewport`].
+pub fn logical_viewport(x: f32, y: f32, w: f32, h: f32) -> (i32, i32, i32, i32) {
+    let dpi = screen_dpi_scale();
+    (
+        (x * dpi).round() as i32,
+        (y * dpi).round() as i32,
+        (w * dpi).round() as i32,
+        (h * dpi).round() as i32,
+    )
 }
 
 /// Helper for grid layouts
@@ -275,4 +310,60 @@ pub fn handle_scroll(
 
     let max_scroll = (total_height - view_height).max(0.0);
     scroll.clamp(0.0, max_scroll)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A 1280x720 logical UI in a 1280x720 logical window covers the whole
+    /// framebuffer, whatever the display scaling. Regression test for the
+    /// letterbox rendering shrunk into the bottom-left corner on scaled
+    /// displays: `glViewport` takes physical pixels, but `screen_width()` and
+    /// `offset`/`scale` are logical.
+    #[test]
+    fn viewport_is_physical_pixels() {
+        let ui = VirtualUi {
+            logical_width: 1280.0,
+            logical_height: 720.0,
+            scale: 1.0,
+            offset: Vec2::ZERO,
+        };
+
+        assert_eq!(ui.viewport_for_dpi(1.0), (0, 0, 1280, 720));
+        // 150% scaling: the framebuffer is 1920x1080, so the viewport must be
+        // too -- not the logical 1280x720, which would cover only 4/9 of it.
+        assert_eq!(ui.viewport_for_dpi(1.5), (0, 0, 1920, 1080));
+        assert_eq!(ui.viewport_for_dpi(2.0), (0, 0, 2560, 1440));
+    }
+
+    /// Letterbox offsets have to scale too, or the bars land in the wrong place.
+    #[test]
+    fn viewport_offset_scales_with_dpi() {
+        let ui = VirtualUi {
+            logical_width: 1280.0,
+            logical_height: 720.0,
+            scale: 0.5,
+            offset: vec2(100.0, 40.0),
+        };
+
+        assert_eq!(ui.viewport_for_dpi(1.0), (100, 40, 640, 360));
+        assert_eq!(ui.viewport_for_dpi(2.0), (200, 80, 1280, 720));
+    }
+
+    /// Mouse mapping stays in logical space and must not pick up the DPI scale
+    /// -- `mouse_position()` is already logical.
+    #[test]
+    fn screen_to_ui_is_dpi_independent() {
+        let ui = VirtualUi {
+            logical_width: 1280.0,
+            logical_height: 720.0,
+            scale: 0.5,
+            offset: vec2(100.0, 40.0),
+        };
+
+        assert_eq!(ui.screen_to_ui(vec2(100.0, 40.0)), Vec2::ZERO);
+        assert_eq!(ui.screen_to_ui(vec2(420.0, 220.0)), vec2(640.0, 360.0));
+        assert_eq!(ui.ui_to_screen(vec2(640.0, 360.0)), vec2(420.0, 220.0));
+    }
 }
