@@ -66,14 +66,9 @@ impl AssetManager {
             return Ok(());
         }
 
-        match load_texture(path).await {
-            Ok(texture) => {
-                texture.set_filter(filter);
-                self.textures.insert(name.to_string(), texture);
-                Ok(())
-            }
-            Err(e) => Err(format!("Failed to load texture '{}': {:?}", path, e)),
-        }
+        let texture = load_texture_file(path, filter).await?;
+        self.textures.insert(name.to_string(), texture);
+        Ok(())
     }
 
     /// Load multiple textures at once
@@ -307,11 +302,8 @@ impl AssetPack {
         let bytes = self
             .bytes(path)
             .ok_or_else(|| format!("Asset pack entry not found: {}", path))?;
-        let image = Image::from_file_with_format(bytes, format)
-            .map_err(|e| format!("Failed to decode asset pack texture '{}': {}", path, e))?;
-        let texture = Texture2D::from_image(&image);
-        texture.set_filter(filter);
-        Ok(texture)
+        decode_texture_bytes(bytes, filter, format)
+            .map_err(|e| format!("Failed to decode asset pack texture '{}': {}", path, e))
     }
 
     /// Check if the pack contains an entry.
@@ -342,6 +334,55 @@ pub async fn load_texture_from_pack_or_file(
         }
     }
 
+    load_texture_file(path, filter).await
+}
+
+/// True if `bytes` starts with the JPEG SOI marker.
+fn is_jpeg(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0xFF, 0xD8, 0xFF])
+}
+
+/// Decode image bytes into a texture, transparently handling JPEG.
+///
+/// Macroquad compiles `image` with only the `png` and `tga` decoders, so JPEG bytes fail in
+/// `Image::from_file_with_format`. JPEG is detected by magic bytes and decoded separately; every
+/// other format keeps going through Macroquad so existing behaviour is unchanged.
+///
+/// An explicit `format` is honoured as-is and skips the JPEG path.
+pub fn decode_texture_bytes(
+    bytes: &[u8],
+    filter: FilterMode,
+    format: Option<ImageFormat>,
+) -> Result<Texture2D, String> {
+    let texture = if format.is_none() && is_jpeg(bytes) {
+        let decoded = image::load_from_memory_with_format(bytes, image::ImageFormat::Jpeg)
+            .map_err(|e| format!("Failed to decode JPEG: {}", e))?
+            .to_rgba8();
+        Texture2D::from_rgba8(
+            u16::try_from(decoded.width()).map_err(|_| "JPEG width exceeds 65535".to_string())?,
+            u16::try_from(decoded.height()).map_err(|_| "JPEG height exceeds 65535".to_string())?,
+            &decoded,
+        )
+    } else {
+        let image = Image::from_file_with_format(bytes, format)
+            .map_err(|e| format!("Failed to decode image: {}", e))?;
+        Texture2D::from_image(&image)
+    };
+
+    texture.set_filter(filter);
+    Ok(texture)
+}
+
+/// Load a texture from a loose file path, transparently handling JPEG.
+async fn load_texture_file(path: &str, filter: FilterMode) -> Result<Texture2D, String> {
+    if has_jpeg_extension(path) {
+        let bytes = macroquad::file::load_file(path)
+            .await
+            .map_err(|e| format!("Failed to load texture '{}': {}", path, e))?;
+        return decode_texture_bytes(&bytes, filter, None)
+            .map_err(|e| format!("Failed to load texture '{}': {}", path, e));
+    }
+
     match load_texture(path).await {
         Ok(texture) => {
             texture.set_filter(filter);
@@ -349,6 +390,11 @@ pub async fn load_texture_from_pack_or_file(
         }
         Err(e) => Err(format!("Failed to load texture '{}': {:?}", path, e)),
     }
+}
+
+fn has_jpeg_extension(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".jpg") || lower.ends_with(".jpeg")
 }
 
 fn normalize_asset_pack_path(path: &str) -> String {
@@ -361,13 +407,7 @@ fn normalize_asset_pack_path(path: &str) -> String {
 
 /// Load a texture with a specific filter mode
 pub async fn load_texture_filtered(path: &str, filter: FilterMode) -> Result<Texture2D, String> {
-    match load_texture(path).await {
-        Ok(texture) => {
-            texture.set_filter(filter);
-            Ok(texture)
-        }
-        Err(e) => Err(format!("Failed to load texture '{}': {:?}", path, e)),
-    }
+    load_texture_file(path, filter).await
 }
 
 /// Load a texture with Nearest filter (pixel-perfect)
@@ -475,6 +515,21 @@ mod tests {
         assert_eq!(textures.len(), 1);
         assert_eq!(textures[0].key, "bg");
         assert!(matches!(textures[0].filter, Some(TextureFilter::Linear)));
+    }
+
+    #[test]
+    fn test_is_jpeg_detects_soi_marker() {
+        assert!(is_jpeg(&[0xFF, 0xD8, 0xFF, 0xE0]));
+        // PNG magic must not be mistaken for JPEG.
+        assert!(!is_jpeg(&[0x89, 0x50, 0x4E, 0x47]));
+        assert!(!is_jpeg(&[]));
+    }
+
+    #[test]
+    fn test_has_jpeg_extension_is_case_insensitive() {
+        assert!(has_jpeg_extension("assets/bg.jpg"));
+        assert!(has_jpeg_extension("assets/bg.JPEG"));
+        assert!(!has_jpeg_extension("assets/bg.png"));
     }
 
     #[test]

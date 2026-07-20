@@ -10,6 +10,10 @@ db = ["dep:sqlx", "dep:async-std"]
 
 [dependencies]
 macroquad = "0.4"
+# macroquad pins `image` to png+tga only, so JPEG assets cannot be decoded by
+# `load_texture`. Same version as macroquad's so Cargo unifies it to one copy;
+# no rayon (the `jpeg_rayon` feature) so wasm builds stay single-threaded.
+image = { version = "0.24", default-features = false, features = ["jpeg"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "5.0"
